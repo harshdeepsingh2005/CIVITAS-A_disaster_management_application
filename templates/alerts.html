@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - Civitas{% endblock %}
+
+{% block content %}
+<div class="alerts-page">
+    <div class="page-header">
+        <h1>🚨 Emergency Alerts</h1>
+        <p>Stay informed with real-time emergency notifications</p>
+    </div>
+
+    {% if current_user.role in ['government', 'rescuer'] %}
+        <!-- Alert Creation Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📢 Create New Alert</h3>
+                <span class="card-subtitle">Broadcast emergency information</span>
+            </div>
+            <form class="civitas-form" data-action="alerts">
+                <div class="form-group">
+                    <label for="title" class="form-label">Alert Title</label>
+                    <input type="text" id="title" name="title" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="message" class="form-label">Alert Message</label>
+                    <textarea id="message" name="message" class="form-textarea" required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="alert_type" class="form-label">Alert Type</label>
+                    <select id="alert_type" name="alert_type" class="form-select" required>
+                        <option value="general">General Information</option>
+                        <option value="weather">Weather Warning</option>
+                        <option value="evacuation">Evacuation Order</option>
+                        <option value="safety">Safety Advisory</option>
+                        <option value="emergency">Emergency Alert</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="severity" class="form-label">Severity Level</label>
+                    <select id="severity" name="severity" class="form-select" required>
+                        <option value="low">Low - Informational</option>
+                        <option value="medium" selected>Medium - Caution</option>
+                        <option value="high">High - Warning</option>
+                        <option value="critical">Critical - Emergency</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <span class="loading-spinner" style="display: none;"></span>
+                    <span class="btn-text">Broadcast Alert</span>
+                </button>
+            </form>
+        </div>
+    {% endif %}
+
+    <!-- Alerts List -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📊 Active Alerts</h3>
+            <div class="card-actions">
+                <button class="btn btn-secondary" onclick="refreshAlerts()">🔄 Refresh</button>
+                <button class="btn btn-warning" onclick="broadcastViaBLE()">📡 BLE Broadcast</button>
+            </div>
+        </div>
+        <div class="alerts-list" id="alertsList">
+            <div class="loading-placeholder">
+                <div class="loading-spinner"></div>
+                <span>Loading alerts...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.alert-item {
+    background: var(--accent-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.alert-item:hover {
+    border-color: var(--neon-orange);
+    box-shadow: 0 4px 16px rgba(255, 107, 53, 0.1);
+}
+
+.alert-item.critical {
+    border-color: var(--neon-red);
+    background: rgba(255, 51, 102, 0.05);
+}
+
+.alert-item.high {
+    border-color: var(--neon-orange);
+    background: rgba(255, 107, 53, 0.05);
+}
+
+.alert-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.alert-title {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.alert-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.alert-type {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--neon-blue);
+}
+
+.alert-message {
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.rewritten-message {
+    background: rgba(0, 255, 136, 0.1);
+    border-left: 3px solid var(--neon-green);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.rewritten-message-title {
+    font-weight: bold;
+    color: var(--neon-green);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rewritten-message-content {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.alert-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.alert-timestamp {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.alert-priority-indicator {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--neon-orange);
+    animation: pulse 2s infinite;
+}
+
+.alert-priority-indicator.critical {
+    background: var(--neon-red);
+}
+
+.alert-priority-indicator.high {
+    background: var(--neon-orange);
+}
+
+.alert-priority-indicator.medium {
+    background: #ffff00;
+}
+
+.alert-priority-indicator.low {
+    background: var(--neon-green);
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@media (max-width: 768px) {
+    .alert-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .alert-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .alert-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}
+</style>
+
+<script>
+async function loadAlerts() {
+    try {
+        const response = await fetch('/api/alerts');
+        const alerts = await response.json();
+        
+        const alertsList = document.getElementById('alertsList');
+        
+        if (alerts.length === 0) {
+            alertsList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🚨</div>
+                    <h3>No alerts found</h3>
+                    <p>No emergency alerts have been issued yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        alertsList.innerHTML = alerts.map(alert => `
+            <div class="alert-item ${alert.severity}">
+                <div class="alert-priority-indicator ${alert.severity}"></div>
+                
+                <div class="alert-header">
+                    <div>
+                        <div class="alert-title">${alert.title}</div>
+                        <div class="alert-meta">
+                            <span class="alert-type">${alert.alert_type}</span>
+                            <span class="status-badge status-${alert.severity}">${alert.severity}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert-message">${alert.message}</div>
+                
+                ${alert.rewritten_message ? `
+                    <div class="rewritten-message">
+                        <div class="rewritten-message-title">
+                            ✨ AI Enhanced Message
+                        </div>
+                        <div class="rewritten-message-content">${alert.rewritten_message}</div>
+                    </div>
+                ` : ''}
+                
+                <div class="alert-actions">
+                    <span class="alert-timestamp">${new Date(alert.created_at).toLocaleString()}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="shareAlert(${alert.id})">
+                        📤 Share
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading alerts:', error);
+        document.getElementById('alertsList').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">❌</div>
+                <h3>Error loading alerts</h3>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
+}
+
+function refreshAlerts() {
+    loadAlerts();
+}
+
+async function broadcastViaBLE() {
+    try {
+        if (window.bleMesh && window.bleMesh.isConnected) {
+            const alerts = await fetch('/api/alerts').then(r => r.json());
+            const latestAlert = alerts[0];
+            
+            if (latestAlert) {
+                await window.bleMesh.broadcast({
+                    type: 'alert',
+                    data: latestAlert,
+                    timestamp: Date.now()
+                });
+                
+                alert('Alert broadcasted via BLE mesh!');
+            } else {
+                alert('No alerts to broadcast');
+            }
+        } else {
+            alert('BLE mesh not connected. Please connect first.');
+        }
+    } catch (error) {
+        console.error('Error broadcasting via BLE:', error);
+        alert('Error broadcasting alert');
+    }
+}
+
+function shareAlert(alertId) {
+    if (navigator.share) {
+        navigator.share({
+            title: 'Emergency Alert from Civitas',
+            text: 'Check this emergency alert',
+            url: window.location.href
+        });
+    } else {
+        // Fallback: copy to clipboard
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('Alert link copied to clipboard');
+        });
+    }
+}
+
+// Load alerts when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadAlerts();
+    
+    // Auto-refresh alerts every 30 seconds
+    setInterval(loadAlerts, 30000);
+});
+</script>
+{% endblock %}
+

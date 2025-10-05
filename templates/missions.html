@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+
+{% block title %}Missions - Civitas{% endblock %}
+
+{% block content %}
+<div class="missions-page">
+    <div class="page-header">
+        <h1>🎯 Rescue Missions</h1>
+        <p>Coordinate and manage emergency response operations</p>
+    </div>
+
+    {% if current_user.role in ['government', 'rescuer'] %}
+        <!-- Mission Creation Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📋 Create New Mission</h3>
+                <span class="card-subtitle">Assign rescue and response operations</span>
+            </div>
+            <form class="civitas-form" data-action="missions">
+                <div class="form-group">
+                    <label for="title" class="form-label">Mission Title</label>
+                    <input type="text" id="title" name="title" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description" class="form-label">Mission Description</label>
+                    <textarea id="description" name="description" class="form-textarea" required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="location" class="form-label">Mission Location</label>
+                    <input type="text" id="location" name="location" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="priority" class="form-label">Priority Level</label>
+                    <select id="priority" name="priority" class="form-select" required>
+                        <option value="low">Low - Routine</option>
+                        <option value="medium" selected>Medium - Important</option>
+                        <option value="high">High - Urgent</option>
+                        <option value="critical">Critical - Emergency</option>
+                    </select>
+                </div>
+                
+                {% if current_user.role == 'government' %}
+                <div class="form-group">
+                    <label for="assigned_to" class="form-label">Assign To</label>
+                    <select id="assigned_to" name="assigned_to" class="form-select">
+                        <option value="">Select Rescuer</option>
+                        <!-- This would be populated with available rescuers -->
+                    </select>
+                </div>
+                {% endif %}
+                
+                <button type="submit" class="btn btn-primary">
+                    <span class="loading-spinner" style="display: none;"></span>
+                    <span class="btn-text">Create Mission</span>
+                </button>
+            </form>
+        </div>
+    {% endif %}
+
+    <!-- Missions List -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📊 Active Missions</h3>
+            <div class="card-actions">
+                <button class="btn btn-secondary" onclick="refreshMissions()">🔄 Refresh</button>
+                <button class="btn btn-warning" onclick="syncMissionsViaBLE()">📡 BLE Sync</button>
+            </div>
+        </div>
+        <div class="missions-list" id="missionsList">
+            <div class="loading-placeholder">
+                <div class="loading-spinner"></div>
+                <span>Loading missions...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.missions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.mission-item {
+    background: var(--accent-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.mission-item:hover {
+    border-color: var(--neon-green);
+    box-shadow: 0 4px 16px rgba(0, 255, 136, 0.1);
+}
+
+.mission-item.critical {
+    border-color: var(--neon-red);
+    background: rgba(255, 51, 102, 0.05);
+}
+
+.mission-item.high {
+    border-color: var(--neon-orange);
+    background: rgba(255, 107, 53, 0.05);
+}
+
+.mission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.mission-title {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.mission-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.mission-location {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.mission-description {
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.ai-strategy {
+    background: rgba(0, 255, 136, 0.1);
+    border-left: 3px solid var(--neon-green);
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.ai-strategy-title {
+    font-weight: bold;
+    color: var(--neon-green);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ai-strategy-content {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.mission-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.mission-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mission-progress {
+    width: 100px;
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.mission-progress-bar {
+    height: 100%;
+    background: var(--neon-green);
+    transition: width 0.3s ease;
+}
+
+.mission-timestamp {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.mission-priority-indicator {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--neon-orange);
+    animation: pulse 2s infinite;
+}
+
+.mission-priority-indicator.critical {
+    background: var(--neon-red);
+}
+
+.mission-priority-indicator.high {
+    background: var(--neon-orange);
+}
+
+.mission-priority-indicator.medium {
+    background: #ffff00;
+}
+
+.mission-priority-indicator.low {
+    background: var(--neon-green);
+    animation: none;
+}
+
+@media (max-width: 768px) {
+    .mission-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .mission-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .mission-actions {
+        justify-content: flex-start;
+    }
+}
+</style>
+
+<script>
+async function loadMissions() {
+    try {
+        const response = await fetch('/api/missions');
+        const missions = await response.json();
+        
+        const missionsList = document.getElementById('missionsList');
+        
+        if (missions.length === 0) {
+            missionsList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎯</div>
+                    <h3>No missions found</h3>
+                    <p>No rescue missions have been assigned yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        missionsList.innerHTML = missions.map(mission => `
+            <div class="mission-item ${mission.priority}">
+                <div class="mission-priority-indicator ${mission.priority}"></div>
+                
+                <div class="mission-header">
+                    <div>
+                        <div class="mission-title">${mission.title}</div>
+                        <div class="mission-meta">
+                            <span class="mission-location">📍 ${mission.location}</span>
+                            <span class="status-badge status-${mission.priority}">${mission.priority}</span>
+                            <span class="status-badge status-${mission.status}">${mission.status}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mission-description">${mission.description}</div>
+                
+                ${mission.ai_strategy ? `
+                    <div class="ai-strategy">
+                        <div class="ai-strategy-title">
+                            🤖 AI Strategy
+                        </div>
+                        <div class="ai-strategy-content">${mission.ai_strategy}</div>
+                    </div>
+                ` : ''}
+                
+                <div class="mission-actions">
+                    <div class="mission-status">
+                        <span>Progress:</span>
+                        <div class="mission-progress">
+                            <div class="mission-progress-bar" style="width: ${getMissionProgress(mission.status)}%"></div>
+                        </div>
+                    </div>
+                    <span class="mission-timestamp">${new Date(mission.created_at).toLocaleString()}</span>
+                    <button class="btn btn-primary btn-sm" onclick="updateMissionStatus(${mission.id})">
+                        Update Status
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading missions:', error);
+        document.getElementById('missionsList').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">❌</div>
+                <h3>Error loading missions</h3>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
+}
+
+function getMissionProgress(status) {
+    const progressMap = {
+        'active': 25,
+        'in_progress': 50,
+        'near_completion': 75,
+        'completed': 100
+    };
+    return progressMap[status] || 0;
+}
+
+function refreshMissions() {
+    loadMissions();
+}
+
+async function syncMissionsViaBLE() {
+    try {
+        if (window.bleMesh && window.bleMesh.isConnected) {
+            const missions = await fetch('/api/missions').then(r => r.json());
+            
+            await window.bleMesh.broadcast({
+                type: 'missions',
+                data: missions,
+                timestamp: Date.now()
+            });
+            
+            alert('Missions synced via BLE mesh!');
+        } else {
+            alert('BLE mesh not connected. Please connect first.');
+        }
+    } catch (error) {
+        console.error('Error syncing missions via BLE:', error);
+        alert('Error syncing missions');
+    }
+}
+
+function updateMissionStatus(missionId) {
+    const newStatus = prompt('Update mission status (active, in_progress, near_completion, completed):');
+    if (newStatus) {
+        // This would make an API call to update the mission status
+        console.log(`Updating mission ${missionId} to status: ${newStatus}`);
+        alert('Mission status updated!');
+        loadMissions(); // Refresh the list
+    }
+}
+
+// Load missions when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadMissions();
+    
+    // Auto-refresh missions every 60 seconds
+    setInterval(loadMissions, 60000);
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+
+{% block title %}Safehouses - Civitas{% endblock %}
+
+{% block content %}
+<div class="safehouses-page">
+    <div class="page-header">
+        <h1>🏠 Emergency Safehouses</h1>
+        <p>Find and manage emergency shelter locations</p>
+    </div>
+
+    {% if current_user.role == 'government' %}
+        <!-- Safehouse Management Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📋 Add New Safehouse</h3>
+                <span class="card-subtitle">Register emergency shelter locations</span>
+            </div>
+            <form class="civitas-form" data-action="safehouses">
+                <div class="form-group">
+                    <label for="name" class="form-label">Safehouse Name</label>
+                    <input type="text" id="name" name="name" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="location" class="form-label">Location</label>
+                    <input type="text" id="location" name="location" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="capacity" class="form-label">Capacity</label>
+                    <input type="number" id="capacity" name="capacity" class="form-input" required min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="facilities" class="form-label">Available Facilities</label>
+                    <textarea id="facilities" name="facilities" class="form-textarea" placeholder="Food, Water, Medical Aid, Restrooms, etc."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contact_info" class="form-label">Contact Information</label>
+                    <input type="text" id="contact_info" name="contact_info" class="form-input" placeholder="Phone number or contact details">
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <span class="loading-spinner" style="display: none;"></span>
+                    <span class="btn-text">Add Safehouse</span>
+                </button>
+            </form>
+        </div>
+    {% endif %}
+
+    <!-- Safehouses Grid -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🏠 Available Safehouses</h3>
+            <div class="card-actions">
+                <button class="btn btn-secondary" onclick="refreshSafehouses()">🔄 Refresh</button>
+                <button class="btn btn-warning" onclick="syncSafehousesViaBLE()">📡 BLE Sync</button>
+            </div>
+        </div>
+        <div class="safehouses-grid" id="safehousesGrid">
+            <div class="loading-placeholder">
+                <div class="loading-spinner"></div>
+                <span>Loading safehouses...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Safehouse Analytics -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📊 Safehouse Analytics</h3>
+            <span class="card-subtitle">Occupancy and capacity insights</span>
+        </div>
+        <div class="safehouse-analytics">
+            <div class="analytics-summary">
+                <div class="summary-item">
+                    <div class="summary-label">Total Safehouses</div>
+                    <div class="summary-value" id="totalSafehouses">0</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Total Capacity</div>
+                    <div class="summary-value" id="totalCapacity">0</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Current Occupancy</div>
+                    <div class="summary-value" id="currentOccupancy">0</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Available Spaces</div>
+                    <div class="summary-value" id="availableSpaces">0</div>
+                </div>
+            </div>
+            
+            <div class="occupancy-chart">
+                <h4>🏠 Occupancy Overview</h4>
+                <div class="chart-container">
+                    <canvas id="occupancyChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.safehouses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.safehouse-card {
+    background: var(--accent-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.safehouse-card:hover {
+    border-color: var(--neon-green);
+    box-shadow: 0 4px 16px rgba(0, 255, 136, 0.1);
+    transform: translateY(-2px);
+}
+
+.safehouse-card.full {
+    border-color: var(--neon-red);
+    background: rgba(255, 51, 102, 0.05);
+}
+
+.safehouse-card.available {
+    border-color: var(--neon-green);
+    background: rgba(0, 255, 136, 0.05);
+}
+
+.safehouse-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.safehouse-name {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.safehouse-location {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.safehouse-capacity {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--secondary-bg);
+    border-radius: 8px;
+}
+
+.capacity-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.capacity-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.capacity-numbers {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.capacity-bar {
+    width: 100px;
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.capacity-fill {
+    height: 100%;
+    background: var(--neon-green);
+    transition: width 0.3s ease;
+}
+
+.capacity-fill.high {
+    background: var(--neon-orange);
+}
+
+.capacity-fill.full {
+    background: var(--neon-red);
+}
+
+.safehouse-facilities {
+    margin-bottom: 1rem;
+}
+
+.facilities-title {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.facilities-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.facility-tag {
+    padding: 0.25rem 0.75rem;
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--neon-blue);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.safehouse-contact {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--secondary-bg);
+    border-radius: 8px;
+}
+
+.contact-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.contact-info {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.safehouse-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.occupancy-status {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.occupancy-status.available {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--neon-green);
+}
+
+.occupancy-status.high {
+    background: rgba(255, 107, 53, 0.2);
+    color: var(--neon-orange);
+}
+
+.occupancy-status.full {
+    background: rgba(255, 51, 102, 0.2);
+    color: var(--neon-red);
+}
+
+.safehouse-analytics {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.summary-item {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.summary-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.summary-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--neon-blue);
+}
+
+.occupancy-chart {
+    background: rgba(0, 255, 136, 0.05);
+    border: 1px solid var(--neon-green);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.occupancy-chart h4 {
+    color: var(--neon-green);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-container {
+    padding: 1rem;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .safehouses-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .analytics-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .safehouse-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}
+</style>
+
+<script>
+async function loadSafehouses() {
+    try {
+        const response = await fetch('/api/safehouses');
+        const safehouses = await response.json();
+        
+        const safehousesGrid = document.getElementById('safehousesGrid');
+        
+        if (safehouses.length === 0) {
+            safehousesGrid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🏠</div>
+                    <h3>No safehouses found</h3>
+                    <p>No emergency safehouses have been registered yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        safehousesGrid.innerHTML = safehouses.map(safehouse => {
+            const availability = safehouse.availability;
+            const occupancyRate = (safehouse.current_occupancy / safehouse.capacity) * 100;
+            const statusClass = availability === 0 ? 'full' : occupancyRate > 80 ? 'high' : 'available';
+            const statusText = availability === 0 ? 'Full' : occupancyRate > 80 ? 'High' : 'Available';
+            
+            return `
+                <div class="safehouse-card ${statusClass}">
+                    <div class="occupancy-status ${statusClass}">${statusText}</div>
+                    
+                    <div class="safehouse-header">
+                        <div>
+                            <div class="safehouse-name">${safehouse.name}</div>
+                            <div class="safehouse-location">📍 ${safehouse.location}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="safehouse-capacity">
+                        <div class="capacity-info">
+                            <div class="capacity-label">Capacity</div>
+                            <div class="capacity-numbers">${safehouse.current_occupancy}/${safehouse.capacity}</div>
+                        </div>
+                        <div class="capacity-bar">
+                            <div class="capacity-fill ${statusClass}" style="width: ${occupancyRate}%"></div>
+                        </div>
+                    </div>
+                    
+                    ${safehouse.facilities ? `
+                        <div class="safehouse-facilities">
+                            <div class="facilities-title">Available Facilities</div>
+                            <div class="facilities-list">
+                                ${safehouse.facilities.split(',').map(facility => 
+                                    `<span class="facility-tag">${facility.trim()}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${safehouse.contact_info ? `
+                        <div class="safehouse-contact">
+                            <div class="contact-label">Contact Information</div>
+                            <div class="contact-info">${safehouse.contact_info}</div>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="safehouse-actions">
+                        <button class="btn btn-primary btn-sm" onclick="navigateToSafehouse('${safehouse.location}')">
+                            🗺️ Navigate
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="contactSafehouse('${safehouse.contact_info}')">
+                            📞 Contact
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // Update analytics
+        updateSafehouseAnalytics(safehouses);
+        
+    } catch (error) {
+        console.error('Error loading safehouses:', error);
+        document.getElementById('safehousesGrid').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">❌</div>
+                <h3>Error loading safehouses</h3>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
+}
+
+function updateSafehouseAnalytics(safehouses) {
+    const totalSafehouses = safehouses.length;
+    const totalCapacity = safehouses.reduce((sum, s) => sum + s.capacity, 0);
+    const currentOccupancy = safehouses.reduce((sum, s) => sum + s.current_occupancy, 0);
+    const availableSpaces = totalCapacity - currentOccupancy;
+    
+    document.getElementById('totalSafehouses').textContent = totalSafehouses;
+    document.getElementById('totalCapacity').textContent = totalCapacity;
+    document.getElementById('currentOccupancy').textContent = currentOccupancy;
+    document.getElementById('availableSpaces').textContent = availableSpaces;
+    
+    // Create occupancy chart
+    createOccupancyChart(safehouses);
+}
+
+function createOccupancyChart(safehouses) {
+    const canvas = document.getElementById('occupancyChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw simple bar chart
+    const maxCapacity = Math.max(...safehouses.map(s => s.capacity));
+    const barWidth = canvas.width / safehouses.length - 10;
+    
+    safehouses.forEach((safehouse, index) => {
+        const occupancyRate = (safehouse.current_occupancy / safehouse.capacity) * 100;
+        const barHeight = (safehouse.capacity / maxCapacity) * (canvas.height - 40);
+        const x = index * (barWidth + 10) + 5;
+        const y = canvas.height - barHeight - 20;
+        
+        // Draw background bar
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(x, y, barWidth, barHeight);
+        
+        // Draw occupancy bar
+        const occupancyHeight = (occupancyRate / 100) * barHeight;
+        ctx.fillStyle = occupancyRate > 80 ? '#ff3366' : occupancyRate > 50 ? '#ff6b35' : '#00ff88';
+        ctx.fillRect(x, y + barHeight - occupancyHeight, barWidth, occupancyHeight);
+        
+        // Draw label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(safehouse.name.substring(0, 8), x + barWidth/2, canvas.height - 5);
+    });
+}
+
+function refreshSafehouses() {
+    loadSafehouses();
+}
+
+async function syncSafehousesViaBLE() {
+    try {
+        if (window.bleMesh && window.bleMesh.isConnected) {
+            const safehouses = await fetch('/api/safehouses').then(r => r.json());
+            
+            await window.bleMesh.broadcast({
+                type: 'safehouses',
+                data: safehouses,
+                timestamp: Date.now()
+            });
+            
+            alert('Safehouses synced via BLE mesh!');
+        } else {
+            alert('BLE mesh not connected. Please connect first.');
+        }
+    } catch (error) {
+        console.error('Error syncing safehouses via BLE:', error);
+        alert('Error syncing safehouses');
+    }
+}
+
+function navigateToSafehouse(location) {
+    // This would integrate with maps API
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
+    window.open(mapsUrl, '_blank');
+}
+
+function contactSafehouse(contactInfo) {
+    if (contactInfo) {
+        // This would initiate a call or show contact options
+        alert(`Contacting safehouse: ${contactInfo}`);
+    } else {
+        alert('No contact information available');
+    }
+}
+
+// Load safehouses when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadSafehouses();
+    
+    // Auto-refresh safehouses every 5 minutes
+    setInterval(loadSafehouses, 300000);
+});
+</script>
+{% endblock %}
+

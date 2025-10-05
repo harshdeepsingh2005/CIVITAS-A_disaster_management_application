@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Civitas{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>Welcome back, {{ current_user.name }}!</h1>
+        <p class="dashboard-subtitle">Real-time disaster management overview</p>
+    </div>
+
+    <!-- Statistics Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number" data-stat="totalReports">0</div>
+            <div class="stat-label">Total Reports</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" data-stat="activeAlerts">0</div>
+            <div class="stat-label">Active Alerts</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" data-stat="activeMissions">0</div>
+            <div class="stat-label">Active Missions</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" data-stat="availableSafehouses">0</div>
+            <div class="stat-label">Available Safehouses</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" data-stat="totalResources">0</div>
+            <div class="stat-label">Total Resources</div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-2">
+        <!-- Recent Activity -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📊 Recent Activity</h3>
+                <span class="card-subtitle">Latest updates</span>
+            </div>
+            <div class="recent-activity">
+                <div class="activity-item">
+                    <div class="activity-icon">📋</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Loading recent activity...</div>
+                        <div class="activity-time">Just now</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">⚡ Quick Actions</h3>
+                <span class="card-subtitle">Common tasks</span>
+            </div>
+            <div class="quick-actions">
+                {% if current_user.role == 'citizen' %}
+                    <a href="{{ url_for('reports') }}" class="btn btn-primary">
+                        📋 Submit Report
+                    </a>
+                    <a href="{{ url_for('safehouses') }}" class="btn btn-success">
+                        🏠 Find Safehouse
+                    </a>
+                    <a href="{{ url_for('alerts') }}" class="btn btn-warning">
+                        🚨 View Alerts
+                    </a>
+                {% elif current_user.role == 'rescuer' %}
+                    <a href="{{ url_for('missions') }}" class="btn btn-primary">
+                        🎯 View Missions
+                    </a>
+                    <a href="{{ url_for('distribution') }}" class="btn btn-success">
+                        📦 Manage Resources
+                    </a>
+                    <a href="{{ url_for('reports') }}" class="btn btn-warning">
+                        📋 Review Reports
+                    </a>
+                {% elif current_user.role == 'government' %}
+                    <a href="{{ url_for('alerts') }}" class="btn btn-primary">
+                        🚨 Create Alert
+                    </a>
+                    <a href="{{ url_for('missions') }}" class="btn btn-success">
+                        🎯 Assign Mission
+                    </a>
+                    <a href="{{ url_for('analytics') }}" class="btn btn-warning">
+                        📈 View Analytics
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Role-specific Content -->
+    {% if current_user.role == 'citizen' %}
+        <!-- Citizen Dashboard -->
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">🚨 Emergency Contacts</h3>
+                </div>
+                <div class="emergency-contacts">
+                    <div class="contact-item">
+                        <div class="contact-icon">🚨</div>
+                        <div class="contact-info">
+                            <div class="contact-name">Emergency Services</div>
+                            <div class="contact-number">911</div>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">🏥</div>
+                        <div class="contact-info">
+                            <div class="contact-name">Medical Emergency</div>
+                            <div class="contact-number">911</div>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">🔥</div>
+                        <div class="contact-info">
+                            <div class="contact-name">Fire Department</div>
+                            <div class="contact-number">911</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📍 Nearby Safehouses</h3>
+                </div>
+                <div class="nearby-safehouses">
+                    <div class="safehouse-item">
+                        <div class="safehouse-name">Central Community Center</div>
+                        <div class="safehouse-location">123 Main Street</div>
+                        <div class="safehouse-availability">155/200 available</div>
+                    </div>
+                    <div class="safehouse-item">
+                        <div class="safehouse-name">High School Gymnasium</div>
+                        <div class="safehouse-location">456 Education Ave</div>
+                        <div class="safehouse-availability">180/300 available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% elif current_user.role == 'rescuer' %}
+        <!-- Rescuer Dashboard -->
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">🎯 Active Missions</h3>
+                </div>
+                <div class="active-missions">
+                    <div class="mission-item">
+                        <div class="mission-title">Rescue Operation - Downtown</div>
+                        <div class="mission-location">Downtown District</div>
+                        <div class="mission-priority status-critical">Critical</div>
+                    </div>
+                    <div class="mission-item">
+                        <div class="mission-title">Resource Distribution - Zone 2</div>
+                        <div class="mission-location">Zone 2</div>
+                        <div class="mission-priority status-high">High</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📦 Available Resources</h3>
+                </div>
+                <div class="available-resources">
+                    <div class="resource-item">
+                        <div class="resource-name">Emergency Food Rations</div>
+                        <div class="resource-quantity">500 units</div>
+                    </div>
+                    <div class="resource-item">
+                        <div class="resource-name">Bottled Water</div>
+                        <div class="resource-quantity">1000 units</div>
+                    </div>
+                    <div class="resource-item">
+                        <div class="resource-name">Medical Kits</div>
+                        <div class="resource-quantity">50 units</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% elif current_user.role == 'government' %}
+        <!-- Government Dashboard -->
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📊 System Overview</h3>
+                </div>
+                <div class="system-overview">
+                    <div class="overview-item">
+                        <div class="overview-label">Total Users Online</div>
+                        <div class="overview-value">1,247</div>
+                    </div>
+                    <div class="overview-item">
+                        <div class="overview-label">BLE Mesh Nodes</div>
+                        <div class="overview-value">89</div>
+                    </div>
+                    <div class="overview-item">
+                        <div class="overview-label">System Status</div>
+                        <div class="overview-value status-verified">Operational</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">🤖 AI Insights</h3>
+                </div>
+                <div class="ai-insights">
+                    <div class="insight-item">
+                        <div class="insight-title">Resource Demand Prediction</div>
+                        <div class="insight-content">High demand for medical supplies in Zone 3 expected within 2 hours.</div>
+                    </div>
+                    <div class="insight-item">
+                        <div class="insight-title">Evacuation Route Optimization</div>
+                        <div class="insight-content">Route A is congested. Recommend using Route B for faster evacuation.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- BLE Mesh Status -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📡 BLE Mesh Network</h3>
+            <span class="card-subtitle">Peer-to-peer communication status</span>
+        </div>
+        <div class="ble-mesh-status">
+            <div class="mesh-info">
+                <div class="mesh-item">
+                    <div class="mesh-label">Connected Devices</div>
+                    <div class="mesh-value">12</div>
+                </div>
+                <div class="mesh-item">
+                    <div class="mesh-label">Data Sync Status</div>
+                    <div class="mesh-value status-verified">Active</div>
+                </div>
+                <div class="mesh-item">
+                    <div class="mesh-label">Last Sync</div>
+                    <div class="mesh-value">2 minutes ago</div>
+                </div>
+            </div>
+            <div class="mesh-actions">
+                <button class="btn btn-primary" onclick="window.bleMesh.connect()">
+                    🔗 Connect to Mesh
+                </button>
+                <button class="btn btn-secondary" onclick="window.bleMesh.disconnect()">
+                    🔌 Disconnect
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.dashboard-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+    font-size: 2.5rem;
+    color: var(--neon-blue);
+    margin-bottom: 0.5rem;
+}
+
+.dashboard-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
+.quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.emergency-contacts,
+.nearby-safehouses,
+.active-missions,
+.available-resources,
+.system-overview,
+.ai-insights {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.contact-item,
+.safehouse-item,
+.mission-item,
+.resource-item,
+.overview-item,
+.insight-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.contact-icon,
+.activity-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--neon-blue);
+    border-radius: 50%;
+}
+
+.contact-info,
+.activity-content {
+    flex: 1;
+}
+
+.contact-name,
+.activity-title,
+.safehouse-name,
+.mission-title,
+.resource-name,
+.overview-label,
+.insight-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.contact-number,
+.activity-time,
+.safehouse-location,
+.mission-location,
+.resource-quantity,
+.overview-value,
+.insight-content {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.safehouse-availability,
+.mission-priority {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.safehouse-availability {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--neon-green);
+}
+
+.ble-mesh-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+}
+
+.mesh-info {
+    display: flex;
+    gap: 2rem;
+}
+
+.mesh-item {
+    text-align: center;
+}
+
+.mesh-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.mesh-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--neon-blue);
+}
+
+.mesh-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .ble-mesh-status {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .mesh-info {
+        justify-content: space-around;
+    }
+    
+    .mesh-actions {
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load dashboard data
+    if (window.civitasApp) {
+        window.civitasApp.loadDashboardData();
+    }
+    
+    // Update BLE status periodically
+    setInterval(() => {
+        if (window.civitasApp) {
+            window.civitasApp.updateBLEStatus();
+        }
+    }, 5000);
+});
+</script>
+{% endblock %}
+

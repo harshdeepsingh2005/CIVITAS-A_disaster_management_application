@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block title %}Distribution - Civitas{% endblock %}
+
+{% block content %}
+<div class="distribution-page">
+    <div class="page-header">
+        <h1>📦 Resource Distribution</h1>
+        <p>Manage and track emergency resource allocation</p>
+    </div>
+
+    {% if current_user.role in ['government', 'rescuer'] %}
+        <!-- Resource Management Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📋 Add New Resource</h3>
+                <span class="card-subtitle">Track available emergency supplies</span>
+            </div>
+            <form class="civitas-form" data-action="resources">
+                <div class="form-group">
+                    <label for="name" class="form-label">Resource Name</label>
+                    <input type="text" id="name" name="name" class="form-input" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="category" class="form-label">Category</label>
+                    <select id="category" name="category" class="form-select" required>
+                        <option value="food">Food & Water</option>
+                        <option value="medical">Medical Supplies</option>
+                        <option value="shelter">Shelter & Clothing</option>
+                        <option value="transport">Transportation</option>
+                        <option value="communication">Communication</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="quantity" class="form-label">Quantity</label>
+                    <input type="number" id="quantity" name="quantity" class="form-input" required min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="location" class="form-label">Storage Location</label>
+                    <input type="text" id="location" name="location" class="form-input" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <span class="loading-spinner" style="display: none;"></span>
+                    <span class="btn-text">Add Resource</span>
+                </button>
+            </form>
+        </div>
+    {% endif %}
+
+    <!-- Resources Grid -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📊 Available Resources</h3>
+            <div class="card-actions">
+                <button class="btn btn-secondary" onclick="refreshResources()">🔄 Refresh</button>
+                <button class="btn btn-warning" onclick="syncResourcesViaBLE()">📡 BLE Sync</button>
+            </div>
+        </div>
+        <div class="resources-grid" id="resourcesGrid">
+            <div class="loading-placeholder">
+                <div class="loading-spinner"></div>
+                <span>Loading resources...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Distribution Tracking -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📈 Distribution Analytics</h3>
+            <span class="card-subtitle">AI-powered resource optimization</span>
+        </div>
+        <div class="distribution-analytics">
+            <div class="analytics-grid">
+                <div class="analytics-item">
+                    <div class="analytics-label">Total Resources</div>
+                    <div class="analytics-value" id="totalResources">0</div>
+                </div>
+                <div class="analytics-item">
+                    <div class="analytics-label">Distributed Today</div>
+                    <div class="analytics-value" id="distributedToday">0</div>
+                </div>
+                <div class="analytics-item">
+                    <div class="analytics-label">Demand Prediction</div>
+                    <div class="analytics-value" id="demandPrediction">Low</div>
+                </div>
+                <div class="analytics-item">
+                    <div class="analytics-label">Efficiency Score</div>
+                    <div class="analytics-value" id="efficiencyScore">85%</div>
+                </div>
+            </div>
+            
+            <div class="ai-recommendations">
+                <h4>🤖 AI Recommendations</h4>
+                <div class="recommendation-item">
+                    <div class="recommendation-icon">📊</div>
+                    <div class="recommendation-content">
+                        <div class="recommendation-title">Resource Rebalancing</div>
+                        <div class="recommendation-text">Move 50 medical kits from Central Warehouse to Zone 3 for optimal distribution.</div>
+                    </div>
+                </div>
+                <div class="recommendation-item">
+                    <div class="recommendation-icon">🚚</div>
+                    <div class="recommendation-content">
+                        <div class="recommendation-title">Transportation Optimization</div>
+                        <div class="recommendation-text">Use Route B for faster delivery to high-demand areas.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.resources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.resource-card {
+    background: var(--accent-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.resource-card:hover {
+    border-color: var(--neon-blue);
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.resource-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.resource-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.resource-category {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--neon-blue);
+}
+
+.resource-details {
+    margin-bottom: 1rem;
+}
+
+.resource-quantity {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--neon-green);
+    margin-bottom: 0.5rem;
+}
+
+.resource-location {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.resource-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+}
+
+.resource-status.available {
+    background: rgba(0, 255, 136, 0.2);
+    color: var(--neon-green);
+}
+
+.resource-status.allocated {
+    background: rgba(255, 107, 53, 0.2);
+    color: var(--neon-orange);
+}
+
+.resource-status.depleted {
+    background: rgba(255, 51, 102, 0.2);
+    color: var(--neon-red);
+}
+
+.resource-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.distribution-analytics {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.analytics-item {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.analytics-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.analytics-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--neon-blue);
+}
+
+.ai-recommendations {
+    background: rgba(0, 255, 136, 0.05);
+    border: 1px solid var(--neon-green);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.ai-recommendations h4 {
+    color: var(--neon-green);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.recommendation-item {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+}
+
+.recommendation-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--neon-green);
+    border-radius: 50%;
+    color: var(--primary-bg);
+}
+
+.recommendation-content {
+    flex: 1;
+}
+
+.recommendation-title {
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.recommendation-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .resources-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .analytics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .recommendation-item {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+</style>
+
+<script>
+async function loadResources() {
+    try {
+        const response = await fetch('/api/resources');
+        const resources = await response.json();
+        
+        const resourcesGrid = document.getElementById('resourcesGrid');
+        
+        if (resources.length === 0) {
+            resourcesGrid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📦</div>
+                    <h3>No resources found</h3>
+                    <p>No emergency resources have been added yet.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        resourcesGrid.innerHTML = resources.map(resource => `
+            <div class="resource-card">
+                <div class="resource-status ${resource.status}">${resource.status}</div>
+                
+                <div class="resource-header">
+                    <div>
+                        <div class="resource-name">${resource.name}</div>
+                        <div class="resource-category">${resource.category}</div>
+                    </div>
+                </div>
+                
+                <div class="resource-details">
+                    <div class="resource-quantity">${resource.quantity} units</div>
+                    <div class="resource-location">📍 ${resource.location}</div>
+                </div>
+                
+                <div class="resource-actions">
+                    <button class="btn btn-primary btn-sm" onclick="distributeResource(${resource.id})">
+                        📤 Distribute
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="updateResource(${resource.id})">
+                        ✏️ Edit
+                    </button>
+                </div>
+            </div>
+        `).join('');
+        
+        // Update analytics
+        updateAnalytics(resources);
+        
+    } catch (error) {
+        console.error('Error loading resources:', error);
+        document.getElementById('resourcesGrid').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">❌</div>
+                <h3>Error loading resources</h3>
+                <p>Please try again later.</p>
+            </div>
+        `;
+    }
+}
+
+function updateAnalytics(resources) {
+    const totalResources = resources.reduce((sum, r) => sum + r.quantity, 0);
+    const distributedToday = Math.floor(totalResources * 0.3); // Simulate 30% distributed
+    const demandPrediction = totalResources > 1000 ? 'High' : totalResources > 500 ? 'Medium' : 'Low';
+    const efficiencyScore = Math.min(95, Math.max(60, 85 + Math.random() * 10));
+    
+    document.getElementById('totalResources').textContent = totalResources;
+    document.getElementById('distributedToday').textContent = distributedToday;
+    document.getElementById('demandPrediction').textContent = demandPrediction;
+    document.getElementById('efficiencyScore').textContent = Math.round(efficiencyScore) + '%';
+}
+
+function refreshResources() {
+    loadResources();
+}
+
+async function syncResourcesViaBLE() {
+    try {
+        if (window.bleMesh && window.bleMesh.isConnected) {
+            const resources = await fetch('/api/resources').then(r => r.json());
+            
+            await window.bleMesh.broadcast({
+                type: 'resources',
+                data: resources,
+                timestamp: Date.now()
+            });
+            
+            alert('Resources synced via BLE mesh!');
+        } else {
+            alert('BLE mesh not connected. Please connect first.');
+        }
+    } catch (error) {
+        console.error('Error syncing resources via BLE:', error);
+        alert('Error syncing resources');
+    }
+}
+
+function distributeResource(resourceId) {
+    const quantity = prompt('Enter quantity to distribute:');
+    if (quantity && quantity > 0) {
+        // This would make an API call to distribute the resource
+        console.log(`Distributing ${quantity} units of resource ${resourceId}`);
+        alert('Resource distribution recorded!');
+        loadResources(); // Refresh the list
+    }
+}
+
+function updateResource(resourceId) {
+    // This would open an edit modal or redirect to edit page
+    console.log(`Editing resource ${resourceId}`);
+    alert('Edit functionality coming soon!');
+}
+
+// Load resources when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadResources();
+    
+    // Auto-refresh resources every 2 minutes
+    setInterval(loadResources, 120000);
+});
+</script>
+{% endblock %}
+

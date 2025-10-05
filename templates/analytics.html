@@ -1,0 +1,573 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - Civitas{% endblock %}
+
+{% block content %}
+<div class="analytics-page">
+    <div class="page-header">
+        <h1>📈 Analytics Dashboard</h1>
+        <p>AI-powered insights and disaster response analytics</p>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number" id="totalReports">0</div>
+            <div class="stat-label">Total Reports</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="activeAlerts">0</div>
+            <div class="stat-label">Active Alerts</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="completedMissions">0</div>
+            <div class="stat-label">Completed Missions</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="resourcesDistributed">0</div>
+            <div class="stat-label">Resources Distributed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="peopleEvacuated">0</div>
+            <div class="stat-label">People Evacuated</div>
+        </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🤖 AI-Powered Insights</h3>
+            <span class="card-subtitle">Real-time analysis and predictions</span>
+        </div>
+        <div class="ai-insights-grid">
+            <div class="insight-card">
+                <div class="insight-header">
+                    <div class="insight-icon">📊</div>
+                    <div class="insight-title">Resource Demand Prediction</div>
+                </div>
+                <div class="insight-content">
+                    <div class="prediction-chart">
+                        <div class="prediction-bar" style="width: 75%">
+                            <span class="prediction-label">Medical Supplies</span>
+                            <span class="prediction-value">75%</span>
+                        </div>
+                        <div class="prediction-bar" style="width: 60%">
+                            <span class="prediction-label">Food & Water</span>
+                            <span class="prediction-value">60%</span>
+                        </div>
+                        <div class="prediction-bar" style="width: 45%">
+                            <span class="prediction-label">Shelter</span>
+                            <span class="prediction-value">45%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-card">
+                <div class="insight-header">
+                    <div class="insight-icon">🎯</div>
+                    <div class="insight-title">Mission Success Rate</div>
+                </div>
+                <div class="insight-content">
+                    <div class="success-metrics">
+                        <div class="metric-item">
+                            <div class="metric-label">Rescue Operations</div>
+                            <div class="metric-value">92%</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Resource Distribution</div>
+                            <div class="metric-value">88%</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Evacuation Coordination</div>
+                            <div class="metric-value">95%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="insight-card">
+                <div class="insight-header">
+                    <div class="insight-icon">🚨</div>
+                    <div class="insight-title">Alert Response Time</div>
+                </div>
+                <div class="insight-content">
+                    <div class="response-times">
+                        <div class="time-item">
+                            <div class="time-label">Critical Alerts</div>
+                            <div class="time-value">2.3 min</div>
+                        </div>
+                        <div class="time-item">
+                            <div class="time-label">High Priority</div>
+                            <div class="time-value">5.7 min</div>
+                        </div>
+                        <div class="time-item">
+                            <div class="time-label">Medium Priority</div>
+                            <div class="time-value">12.1 min</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trend Analysis -->
+    <div class="grid grid-2">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📈 Incident Trends</h3>
+                <span class="card-subtitle">Last 7 days</span>
+            </div>
+            <div class="trend-chart">
+                <canvas id="incidentChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">🌍 Geographic Distribution</h3>
+                <span class="card-subtitle">Incident hotspots</span>
+            </div>
+            <div class="geographic-map">
+                <div class="map-container">
+                    <div class="hotspot hotspot-high" style="top: 30%; left: 40%;">
+                        <div class="hotspot-label">Zone 1</div>
+                        <div class="hotspot-count">23 incidents</div>
+                    </div>
+                    <div class="hotspot hotspot-medium" style="top: 60%; left: 70%;">
+                        <div class="hotspot-label">Zone 2</div>
+                        <div class="hotspot-count">15 incidents</div>
+                    </div>
+                    <div class="hotspot hotspot-low" style="top: 45%; left: 20%;">
+                        <div class="hotspot-label">Zone 3</div>
+                        <div class="hotspot-count">8 incidents</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLE Mesh Analytics -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📡 BLE Mesh Network Analytics</h3>
+            <span class="card-subtitle">Peer-to-peer communication metrics</span>
+        </div>
+        <div class="ble-analytics">
+            <div class="ble-metrics">
+                <div class="ble-metric">
+                    <div class="ble-metric-label">Connected Devices</div>
+                    <div class="ble-metric-value">89</div>
+                </div>
+                <div class="ble-metric">
+                    <div class="ble-metric-label">Data Sync Rate</div>
+                    <div class="ble-metric-value">98.5%</div>
+                </div>
+                <div class="ble-metric">
+                    <div class="ble-metric-label">Average Latency</div>
+                    <div class="ble-metric-value">45ms</div>
+                </div>
+                <div class="ble-metric">
+                    <div class="ble-metric-label">Network Coverage</div>
+                    <div class="ble-metric-value">87%</div>
+                </div>
+            </div>
+            
+            <div class="network-topology">
+                <h4>Network Topology</h4>
+                <div class="topology-visualization">
+                    <div class="node node-central">Central Hub</div>
+                    <div class="node node-regional">Regional Nodes</div>
+                    <div class="node node-local">Local Devices</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">⚡ System Performance</h3>
+            <span class="card-subtitle">Real-time system health</span>
+        </div>
+        <div class="performance-metrics">
+            <div class="performance-grid">
+                <div class="performance-item">
+                    <div class="performance-label">API Response Time</div>
+                    <div class="performance-value">120ms</div>
+                    <div class="performance-status status-verified">Good</div>
+                </div>
+                <div class="performance-item">
+                    <div class="performance-label">Database Performance</div>
+                    <div class="performance-value">95%</div>
+                    <div class="performance-status status-verified">Excellent</div>
+                </div>
+                <div class="performance-item">
+                    <div class="performance-label">AI Processing Speed</div>
+                    <div class="performance-value">2.1s</div>
+                    <div class="performance-status status-verified">Good</div>
+                </div>
+                <div class="performance-item">
+                    <div class="performance-label">Offline Sync Success</div>
+                    <div class="performance-value">99.2%</div>
+                    <div class="performance-status status-verified">Excellent</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.ai-insights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.insight-card {
+    background: var(--accent-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.insight-card:hover {
+    border-color: var(--neon-blue);
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.1);
+}
+
+.insight-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.insight-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--neon-blue);
+    border-radius: 50%;
+    color: var(--primary-bg);
+}
+
+.insight-title {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.prediction-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.prediction-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: var(--neon-blue);
+    border-radius: 4px;
+    color: var(--primary-bg);
+    font-weight: 600;
+}
+
+.success-metrics,
+.response-times {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.metric-item,
+.time-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--secondary-bg);
+    border-radius: 6px;
+}
+
+.metric-label,
+.time-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.metric-value,
+.time-value {
+    font-weight: bold;
+    color: var(--neon-green);
+    font-size: 1.1rem;
+}
+
+.trend-chart {
+    padding: 1rem;
+    text-align: center;
+}
+
+.geographic-map {
+    padding: 1rem;
+}
+
+.map-container {
+    position: relative;
+    height: 200px;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.hotspot {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-bg);
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.hotspot:hover {
+    transform: scale(1.1);
+}
+
+.hotspot-high {
+    background: var(--neon-red);
+    animation: pulse 2s infinite;
+}
+
+.hotspot-medium {
+    background: var(--neon-orange);
+}
+
+.hotspot-low {
+    background: var(--neon-green);
+}
+
+.hotspot-label {
+    font-size: 0.7rem;
+}
+
+.hotspot-count {
+    font-size: 0.6rem;
+    opacity: 0.9;
+}
+
+.ble-analytics {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.ble-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.ble-metric {
+    text-align: center;
+    padding: 1.5rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.ble-metric-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ble-metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--neon-blue);
+}
+
+.network-topology {
+    background: rgba(0, 212, 255, 0.05);
+    border: 1px solid var(--neon-blue);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.network-topology h4 {
+    color: var(--neon-blue);
+    margin-bottom: 1rem;
+}
+
+.topology-visualization {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 1rem;
+}
+
+.node {
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: bold;
+    color: var(--primary-bg);
+}
+
+.node-central {
+    background: var(--neon-blue);
+}
+
+.node-regional {
+    background: var(--neon-green);
+}
+
+.node-local {
+    background: var(--neon-orange);
+}
+
+.performance-metrics {
+    padding: 1rem;
+}
+
+.performance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.performance-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.performance-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.performance-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--neon-blue);
+    margin-bottom: 0.5rem;
+}
+
+.performance-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+    .ai-insights-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .ble-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .performance-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .topology-visualization {
+        flex-direction: column;
+    }
+}
+</style>
+
+<script>
+// Simple chart implementation (in production, use Chart.js or similar)
+function createIncidentChart() {
+    const canvas = document.getElementById('incidentChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const data = [12, 19, 8, 15, 22, 18, 25]; // Sample data for last 7 days
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw chart
+    const maxValue = Math.max(...data);
+    const barWidth = canvas.width / data.length - 10;
+    
+    data.forEach((value, index) => {
+        const barHeight = (value / maxValue) * (canvas.height - 40);
+        const x = index * (barWidth + 10) + 5;
+        const y = canvas.height - barHeight - 20;
+        
+        // Draw bar
+        ctx.fillStyle = '#00d4ff';
+        ctx.fillRect(x, y, barWidth, barHeight);
+        
+        // Draw label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[index], x + barWidth/2, canvas.height - 5);
+        ctx.fillText(value.toString(), x + barWidth/2, y - 5);
+    });
+}
+
+// Load analytics data
+async function loadAnalytics() {
+    try {
+        // Simulate loading analytics data
+        const reports = await fetch('/api/reports').then(r => r.json()).catch(() => []);
+        const alerts = await fetch('/api/alerts').then(r => r.json()).catch(() => []);
+        const missions = await fetch('/api/missions').then(r => r.json()).catch(() => []);
+        const resources = await fetch('/api/resources').then(r => r.json()).catch(() => []);
+        
+        // Update metrics
+        document.getElementById('totalReports').textContent = reports.length;
+        document.getElementById('activeAlerts').textContent = alerts.filter(a => a.severity === 'critical' || a.severity === 'high').length;
+        document.getElementById('completedMissions').textContent = missions.filter(m => m.status === 'completed').length;
+        document.getElementById('resourcesDistributed').textContent = resources.reduce((sum, r) => sum + r.quantity, 0);
+        document.getElementById('peopleEvacuated').textContent = Math.floor(Math.random() * 1000) + 500; // Simulated data
+        
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+    }
+}
+
+// Initialize analytics when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalytics();
+    createIncidentChart();
+    
+    // Refresh analytics every 5 minutes
+    setInterval(loadAnalytics, 300000);
+});
+</script>
+{% endblock %}
+

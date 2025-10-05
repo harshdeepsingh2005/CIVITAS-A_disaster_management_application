@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Civitas - Disaster Management System{% endblock %}</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Offline-First Disaster Management System with Chrome Nano AI APIs and BLE Mesh Communication">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Civitas">
+    
+    <!-- PWA Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16.png">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <!-- Chrome Nano AI API Integration -->
+    <script>
+        // Chrome Nano AI API Integration
+        if ('chrome' in window && 'nano' in chrome) {
+            window.chromeNanoAPI = chrome.nano;
+        } else {
+            // Fallback for development
+            window.chromeNanoAPI = {
+                summarizer: {
+                    summarize: (text) => Promise.resolve(text.substring(0, 100) + '...')
+                },
+                proofreader: {
+                    proofread: (text) => Promise.resolve(text.trim())
+                },
+                rewriter: {
+                    rewrite: (text) => Promise.resolve(text.replace(/urgent/gi, 'critical'))
+                },
+                translator: {
+                    translate: (text, targetLang) => Promise.resolve(text)
+                },
+                prompt: {
+                    generate: (context, type) => Promise.resolve(`Strategy for ${context}`)
+                }
+            };
+        }
+    </script>
+</head>
+<body>
+    <!-- Offline Banner -->
+    <div class="offline-banner">
+        <span>📡 You're offline. Data will sync when connection is restored.</span>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <a href="{{ url_for('dashboard') }}" class="logo">Civitas</a>
+                
+                <nav class="nav">
+                    {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                            📊 Dashboard
+                        </a>
+                        <a href="{{ url_for('reports') }}" class="nav-link {% if request.endpoint == 'reports' %}active{% endif %}">
+                            📋 Reports
+                        </a>
+                        <a href="{{ url_for('alerts') }}" class="nav-link {% if request.endpoint == 'alerts' %}active{% endif %}">
+                            🚨 Alerts
+                        </a>
+                        <a href="{{ url_for('missions') }}" class="nav-link {% if request.endpoint == 'missions' %}active{% endif %}">
+                            🎯 Missions
+                        </a>
+                        <a href="{{ url_for('distribution') }}" class="nav-link {% if request.endpoint == 'distribution' %}active{% endif %}">
+                            📦 Distribution
+                        </a>
+                        <a href="{{ url_for('analytics') }}" class="nav-link {% if request.endpoint == 'analytics' %}active{% endif %}">
+                            📈 Analytics
+                        </a>
+                        <a href="{{ url_for('safehouses') }}" class="nav-link {% if request.endpoint == 'safehouses' %}active{% endif %}">
+                            🏠 Safehouses
+                        </a>
+                        <a href="{{ url_for('ble_mesh') }}" class="nav-link {% if request.endpoint == 'ble_mesh' %}active{% endif %}">
+                            📡 BLE Mesh
+                        </a>
+                    {% endif %}
+                </nav>
+                
+                <div class="user-info">
+                    {% if current_user.is_authenticated %}
+                        <div class="ble-status">
+                            <div class="ble-indicator"></div>
+                            <span>BLE Status</span>
+                        </div>
+                        <span class="user-role {{ current_user.role }}">{{ current_user.role.title() }}</span>
+                        <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for message in messages %}
+                            <div class="flash-message flash-{{ message.type if message.type else 'info' }}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+            
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- PWA Install Prompt -->
+    <div class="install-prompt">
+        <h4>📱 Install Civitas</h4>
+        <p>Install this app on your device for quick access and offline functionality.</p>
+        <button class="btn btn-primary" onclick="window.civitasApp.installPWA()">
+            Install App
+        </button>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    
+    <!-- BLE Mesh Integration -->
+    <script>
+        // BLE Mesh functionality
+        class BLEMesh {
+            constructor() {
+                this.device = null;
+                this.server = null;
+                this.service = null;
+                this.characteristic = null;
+                this.isConnected = false;
+            }
+
+            async connect() {
+                try {
+                    if (!navigator.bluetooth) {
+                        throw new Error('Web Bluetooth not supported');
+                    }
+
+                    this.device = await navigator.bluetooth.requestDevice({
+                        filters: [{ namePrefix: 'Civitas' }],
+                        optionalServices: ['12345678-1234-1234-1234-123456789abc']
+                    });
+
+                    this.server = await this.device.gatt.connect();
+                    this.service = await this.server.getPrimaryService('12345678-1234-1234-1234-123456789abc');
+                    this.characteristic = await this.service.getCharacteristic('87654321-4321-4321-4321-cba987654321');
+
+                    await this.characteristic.startNotifications();
+                    this.characteristic.addEventListener('characteristicvaluechanged', this.handleData.bind(this));
+
+                    this.isConnected = true;
+                    console.log('BLE Mesh connected');
+                    return true;
+                } catch (error) {
+                    console.error('BLE Mesh connection failed:', error);
+                    this.isConnected = false;
+                    return false;
+                }
+            }
+
+            handleData(event) {
+                const value = event.target.value;
+                const data = JSON.parse(new TextDecoder().decode(value));
+                console.log('BLE Mesh data received:', data);
+                
+                // Process received data
+                if (window.civitasApp) {
+                    window.civitasApp.handleBLEData(data);
+                }
+            }
+
+            async broadcast(data) {
+                if (!this.isConnected || !this.characteristic) {
+                    throw new Error('BLE not connected');
+                }
+
+                const payload = JSON.stringify(data);
+                const encoder = new TextEncoder();
+                await this.characteristic.writeValue(encoder.encode(payload));
+                console.log('BLE Mesh data broadcasted:', data);
+            }
+
+            disconnect() {
+                if (this.device && this.device.gatt.connected) {
+                    this.device.gatt.disconnect();
+                }
+                this.isConnected = false;
+                console.log('BLE Mesh disconnected');
+            }
+        }
+
+        // Initialize BLE Mesh
+        window.bleMesh = new BLEMesh();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+

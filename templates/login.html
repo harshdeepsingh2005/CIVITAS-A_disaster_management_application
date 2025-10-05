@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Civitas{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <h1>🛡️ Civitas</h1>
+            <p class="login-subtitle">Offline-First Disaster Management System</p>
+        </div>
+
+        <div class="login-tabs">
+            <button class="tab-btn active" data-tab="login">Login</button>
+            <button class="tab-btn" data-tab="register">Register</button>
+        </div>
+
+        <!-- Login Form -->
+        <form class="login-form active" id="loginForm" data-action="login">
+            <div class="form-group">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" id="email" name="email" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password" class="form-input" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-full">
+                <span class="loading-spinner" style="display: none;"></span>
+                <span class="btn-text">Login</span>
+            </button>
+        </form>
+
+        <!-- Register Form -->
+        <form class="register-form" id="registerForm" data-action="register" style="display: none;">
+            <div class="form-group">
+                <label for="reg_name" class="form-label">Full Name</label>
+                <input type="text" id="reg_name" name="name" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="reg_email" class="form-label">Email</label>
+                <input type="email" id="reg_email" name="email" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="reg_password" class="form-label">Password</label>
+                <input type="password" id="reg_password" name="password" class="form-input" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="reg_role" class="form-label">Role</label>
+                <select id="reg_role" name="role" class="form-select" required>
+                    <option value="citizen">Citizen</option>
+                    <option value="rescuer">Rescuer</option>
+                    <option value="government">Government Official</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-success btn-full">
+                <span class="loading-spinner" style="display: none;"></span>
+                <span class="btn-text">Register</span>
+            </button>
+        </form>
+
+        <div class="login-footer">
+            <p>🔒 Secure authentication with role-based access</p>
+            <p>📡 BLE mesh communication for offline coordination</p>
+            <p>🤖 AI-powered insights and assistance</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 200px);
+    padding: 2rem 0;
+}
+
+.login-card {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.login-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-green), var(--neon-orange));
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.login-header h1 {
+    font-size: 2.5rem;
+    color: var(--neon-blue);
+    margin-bottom: 0.5rem;
+}
+
+.login-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.login-tabs {
+    display: flex;
+    margin-bottom: 2rem;
+    background: var(--accent-bg);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.tab-btn.active {
+    background: var(--neon-blue);
+    color: var(--primary-bg);
+}
+
+.btn-full {
+    width: 100%;
+    justify-content: center;
+}
+
+.login-footer {
+    margin-top: 2rem;
+    text-align: center;
+}
+
+.login-footer p {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin: 0.5rem 0;
+}
+
+.loading-spinner {
+    display: none;
+}
+
+.btn.loading .loading-spinner {
+    display: inline-block;
+}
+
+.btn.loading .btn-text {
+    display: none;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const tab = this.dataset.tab;
+            
+            // Update active tab
+            tabBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Show/hide forms
+            if (tab === 'login') {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+            }
+        });
+    });
+
+    // Handle form submissions
+    [loginForm, registerForm].forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const spinner = submitBtn.querySelector('.loading-spinner');
+            const btnText = submitBtn.querySelector('.btn-text');
+            
+            // Show loading state
+            submitBtn.classList.add('loading');
+            spinner.style.display = 'inline-block';
+            btnText.style.display = 'none';
+            
+            // Simulate form submission
+            setTimeout(() => {
+                // Reset loading state
+                submitBtn.classList.remove('loading');
+                spinner.style.display = 'none';
+                btnText.style.display = 'inline';
+                
+                // Handle actual form submission
+                const formData = new FormData(this);
+                const data = Object.fromEntries(formData.entries());
+                
+                if (this.id === 'loginForm') {
+                    // Handle login
+                    fetch('/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams(data)
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            window.location.href = '/dashboard';
+                        } else {
+                            alert('Login failed. Please check your credentials.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Login error:', error);
+                        alert('Login failed. Please try again.');
+                    });
+                } else {
+                    // Handle registration
+                    fetch('/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams(data)
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            window.location.href = '/dashboard';
+                        } else {
+                            alert('Registration failed. Please try again.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Registration error:', error);
+                        alert('Registration failed. Please try again.');
+                    });
+                }
+            }, 1000);
+        });
+    });
+});
+</script>
+{% endblock %}
+

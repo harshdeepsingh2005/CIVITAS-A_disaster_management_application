@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Mesh Connection - Civitas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .mesh-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .connection-panel {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .device-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .device-card {
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid #00ff00;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .device-card.connected {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: #00ff00;
+        }
+        .device-card.disconnected {
+            background: rgba(255, 0, 0, 0.1);
+            border-color: #ff0000;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-connected { background: #00ff00; }
+        .status-disconnected { background: #ff0000; }
+        .status-scanning { background: #ffff00; animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .connection-button {
+            background: linear-gradient(45deg, #00ffff, #0080ff);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        .connection-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.4);
+        }
+        .connection-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ Civitas BLE Mesh Network</h1>
+            <nav>
+                <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('alerts') }}">Alerts</a>
+                <a href="{{ url_for('missions') }}">Missions</a>
+                <a href="{{ url_for('reports') }}">Reports</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            </nav>
+        </header>
+
+        <div class="mesh-container">
+            <div class="connection-panel">
+                <h2>📡 BLE Mesh Connection</h2>
+                <div class="ble-status">
+                    <span class="status-indicator" id="bleStatus"></span>
+                    <span id="bleStatusText">Checking BLE availability...</span>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <button class="connection-button" id="connectBtn" onclick="connectToMesh()">
+                        Connect to Mesh
+                    </button>
+                    <button class="connection-button" id="discoverBtn" onclick="discoverDevices()" disabled>
+                        Discover Devices
+                    </button>
+                    <button class="connection-button" id="broadcastBtn" onclick="testBroadcast()" disabled>
+                        Test Broadcast
+                    </button>
+                </div>
+            </div>
+
+            <div class="connection-panel">
+                <h3>🔍 Discovered Devices</h3>
+                <div class="device-list" id="deviceList">
+                    <div class="device-card disconnected">
+                        <h4>No devices found</h4>
+                        <p>Click "Discover Devices" to scan for nearby Civitas devices</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="connection-panel">
+                <h3>📊 Network Statistics</h3>
+                <div id="networkStats">
+                    <p><strong>Connected Devices:</strong> <span id="connectedCount">0</span></p>
+                    <p><strong>Network Health:</strong> <span id="networkHealth">Unknown</span></p>
+                    <p><strong>Last Update:</strong> <span id="lastUpdate">Never</span></p>
+                </div>
+            </div>
+
+            <div class="connection-panel">
+                <h3>📤 Test Message</h3>
+                <textarea id="testMessage" placeholder="Enter a test message to broadcast..." 
+                         style="width: 100%; height: 100px; padding: 10px; border-radius: 5px; border: 1px solid #00ffff; background: rgba(0,0,0,0.3); color: white; resize: vertical;"></textarea>
+                <br><br>
+                <button class="connection-button" onclick="sendTestMessage()" disabled id="sendBtn">
+                    Send Test Message
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let bleConnected = false;
+        let discoveredDevices = [];
+
+        // Check BLE availability on page load
+        window.addEventListener('load', function() {
+            checkBLEStatus();
+        });
+
+        async function checkBLEStatus() {
+            try {
+                const response = await fetch('/api/ble/status');
+                const data = await response.json();
+                
+                const statusIndicator = document.getElementById('bleStatus');
+                const statusText = document.getElementById('bleStatusText');
+                
+                if (data.ble_available) {
+                    statusIndicator.className = 'status-indicator status-connected';
+                    statusText.textContent = 'BLE Available - Ready to connect';
+                    document.getElementById('connectBtn').disabled = false;
+                } else {
+                    statusIndicator.className = 'status-indicator status-disconnected';
+                    statusText.textContent = 'BLE Not Available - Check browser support';
+                }
+                
+                updateNetworkStats(data);
+            } catch (error) {
+                console.error('BLE status check failed:', error);
+                document.getElementById('bleStatus').className = 'status-indicator status-disconnected';
+                document.getElementById('bleStatusText').textContent = 'BLE Status Check Failed';
+            }
+        }
+
+        async function connectToMesh() {
+            const connectBtn = document.getElementById('connectBtn');
+            const statusText = document.getElementById('bleStatusText');
+            
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'Connecting...';
+            statusText.textContent = 'Connecting to BLE mesh...';
+            
+            try {
+                // Check if Web Bluetooth is available
+                if (!navigator.bluetooth) {
+                    throw new Error('Web Bluetooth not supported in this browser');
+                }
+                
+                // Request BLE device
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: 'Civitas' },
+                        { namePrefix: 'BLE' }
+                    ],
+                    optionalServices: [
+                        '12345678-1234-1234-1234-123456789abc', // Custom Civitas Service
+                        '0000180f-0000-1000-8000-00805f9b34fb'  // Battery Service
+                    ]
+                });
+                
+                console.log('Selected device:', device.name);
+                
+                // Connect to GATT server
+                const server = await device.gatt.connect();
+                console.log('Connected to GATT server');
+                
+                // Get primary service
+                const service = await server.getPrimaryService('12345678-1234-1234-1234-123456789abc');
+                console.log('Got primary service');
+                
+                // Get characteristic for notifications
+                const characteristic = await service.getCharacteristic('87654321-4321-4321-4321-cba987654321');
+                console.log('Got characteristic');
+                
+                // Start notifications
+                await characteristic.startNotifications();
+                console.log('Started notifications');
+                
+                // Listen for data
+                characteristic.addEventListener('characteristicvaluechanged', handleBLEData);
+                
+                // Handle disconnection
+                device.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                bleConnected = true;
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.onclick = disconnectFromMesh;
+                statusText.textContent = `Connected to ${device.name}`;
+                
+                document.getElementById('discoverBtn').disabled = false;
+                document.getElementById('broadcastBtn').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                
+                // Start device discovery
+                discoverDevices();
+                
+            } catch (error) {
+                console.error('Connection failed:', error);
+                statusText.textContent = `Connection failed: ${error.message}`;
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Connect to Mesh';
+            }
+        }
+
+        async function disconnectFromMesh() {
+            // Disconnect logic would go here
+            bleConnected = false;
+            document.getElementById('connectBtn').textContent = 'Connect to Mesh';
+            document.getElementById('connectBtn').onclick = connectToMesh;
+            document.getElementById('bleStatusText').textContent = 'Disconnected';
+            document.getElementById('discoverBtn').disabled = true;
+            document.getElementById('broadcastBtn').disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+        }
+
+        function onDisconnected() {
+            console.log('Device disconnected');
+            bleConnected = false;
+            document.getElementById('bleStatusText').textContent = 'Device disconnected';
+        }
+
+        function handleBLEData(event) {
+            const value = event.target.value;
+            const data = new TextDecoder().decode(value);
+            console.log('Received BLE data:', data);
+            
+            try {
+                const message = JSON.parse(data);
+                showNotification(`Received: ${message.type} - ${message.data}`);
+            } catch (e) {
+                showNotification(`Received data: ${data}`);
+            }
+        }
+
+        async function discoverDevices() {
+            const discoverBtn = document.getElementById('discoverBtn');
+            discoverBtn.disabled = true;
+            discoverBtn.textContent = 'Scanning...';
+            
+            try {
+                const response = await fetch('/api/ble/discover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                discoveredDevices = data.devices || [];
+                updateDeviceList();
+                
+                discoverBtn.textContent = 'Discover Devices';
+                discoverBtn.disabled = false;
+                
+            } catch (error) {
+                console.error('Discovery failed:', error);
+                discoverBtn.textContent = 'Discover Devices';
+                discoverBtn.disabled = false;
+            }
+        }
+
+        function updateDeviceList() {
+            const deviceList = document.getElementById('deviceList');
+            
+            if (discoveredDevices.length === 0) {
+                deviceList.innerHTML = `
+                    <div class="device-card disconnected">
+                        <h4>No devices found</h4>
+                        <p>Click "Discover Devices" to scan for nearby Civitas devices</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            deviceList.innerHTML = discoveredDevices.map(device => `
+                <div class="device-card ${device.connected ? 'connected' : 'disconnected'}">
+                    <h4>${device.name}</h4>
+                    <p><strong>Role:</strong> ${device.role}</p>
+                    <p><strong>Distance:</strong> ${device.distance}</p>
+                    <p><strong>Signal:</strong> ${device.signal} dBm</p>
+                    <span class="status-indicator ${device.connected ? 'status-connected' : 'status-disconnected'}"></span>
+                    ${device.connected ? 'Connected' : 'Available'}
+                </div>
+            `).join('');
+        }
+
+        async function testBroadcast() {
+            try {
+                const response = await fetch('/api/ble/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'test',
+                        message: 'Hello from Civitas mesh network!'
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showNotification('Test broadcast sent successfully!');
+                } else {
+                    showNotification('Broadcast failed');
+                }
+            } catch (error) {
+                console.error('Broadcast failed:', error);
+                showNotification('Broadcast error');
+            }
+        }
+
+        async function sendTestMessage() {
+            const message = document.getElementById('testMessage').value;
+            if (!message.trim()) {
+                showNotification('Please enter a message');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/ble/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'user_message',
+                        message: message
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showNotification('Message sent successfully!');
+                    document.getElementById('testMessage').value = '';
+                } else {
+                    showNotification('Message send failed');
+                }
+            } catch (error) {
+                console.error('Message send failed:', error);
+                showNotification('Message send error');
+            }
+        }
+
+        function updateNetworkStats(data) {
+            document.getElementById('connectedCount').textContent = data.connected_devices?.length || 0;
+            document.getElementById('networkHealth').textContent = data.network_health || 'Unknown';
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+
+        function showNotification(message) {
+            // Simple notification - you could enhance this with a proper notification system
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(0, 255, 0, 0.9);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                max-width: 300px;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 3000);
+        }
+
+        // Auto-refresh network stats every 30 seconds
+        setInterval(checkBLEStatus, 30000);
+    </script>
+</body>
+</html>
