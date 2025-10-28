@@ -28,21 +28,36 @@ app = create_app()
 # Chrome Nano AI API Integration
 class ChromeNanoAPI:
     @staticmethod
-    async def summarize_text(text, max_length=100, style="concise"):
+    def summarize_text(text, max_length=100, style="concise"):
         """Generate summary using Chrome's built-in AI"""
         try:
             # Check if we're in a browser environment with Chrome Nano APIs
             if hasattr(app, 'chrome_nano_available') and app.chrome_nano_available:
                 # This would be called from the frontend with real Chrome Nano APIs
-                return await app.chrome_nano_available.summarizer.summarize(text, {
-                    'maxLength': max_length,
-                    'style': style
-                })
+                # For now, return fallback since this is server-side
+                pass
+            
+            # Enhanced fallback implementation
+            words = text.split()
+            if len(words) <= max_length:
+                return text
+            
+            # Create a more intelligent summary
+            sentences = text.split('.')
+            summary_words = []
+            current_length = 0
+            
+            for sentence in sentences:
+                sentence_words = sentence.strip().split()
+                if current_length + len(sentence_words) <= max_length:
+                    summary_words.extend(sentence_words)
+                    current_length += len(sentence_words)
+                else:
+                    break
+            
+            if summary_words:
+                return ' '.join(summary_words) + ('.' if not text.endswith('.') else '')
             else:
-                # Fallback implementation
-                words = text.split()
-                if len(words) <= max_length:
-                    return text
                 return ' '.join(words[:max_length]) + '...'
         except Exception as e:
             print(f"Chrome Nano Summarizer error: {e}")
@@ -51,79 +66,161 @@ class ChromeNanoAPI:
             if len(words) <= max_length:
                 return text
             return ' '.join(words[:max_length]) + '...'
+            if len(words) <= max_length:
+                return text
+            return ' '.join(words[:max_length]) + '...'
     
     @staticmethod
-    async def proofread_text(text, language="en", style="formal"):
+    def proofread_text(text, language="en", style="formal"):
         """Clean and format text using Chrome's Proofreader API"""
         try:
             if hasattr(app, 'chrome_nano_available') and app.chrome_nano_available:
-                return await app.chrome_nano_available.proofreader.proofread(text, {
-                    'language': language,
-                    'style': style
-                })
-            else:
-                # Fallback implementation
-                import re
-                return re.sub(r'\s+', ' ', text.strip())
+                # This would call the real Chrome Nano API from frontend
+                pass
+            
+            # Enhanced fallback implementation
+            import re
+            # Remove extra whitespace
+            cleaned = re.sub(r'\s+', ' ', text.strip())
+            
+            # Basic formatting improvements
+            if style == "formal":
+                # Capitalize first letter of sentences
+                cleaned = re.sub(r'(?:^|[.!?])\s*([a-z])', lambda m: m.group(0).upper(), cleaned)
+                # Ensure proper punctuation
+                if cleaned and not cleaned[-1] in '.!?':
+                    cleaned += '.'
+            
+            return cleaned
         except Exception as e:
             print(f"Chrome Nano Proofreader error: {e}")
             import re
             return re.sub(r'\s+', ' ', text.strip())
     
     @staticmethod
-    async def rewrite_text(text, tone="professional", style="clear", audience="general"):
+    def rewrite_text(text, tone="professional", style="clear", audience="general"):
         """Rewrite text for clarity using Chrome's Rewriter API"""
         try:
             if hasattr(app, 'chrome_nano_available') and app.chrome_nano_available:
-                return await app.chrome_nano_available.rewriter.rewrite(text, {
-                    'tone': tone,
-                    'style': style,
-                    'targetAudience': audience
-                })
-            else:
-                # Fallback implementation
-                rewritten = text.replace("urgent", "critical").replace("help", "assistance")
-                rewritten = rewritten.replace("problem", "situation").replace("bad", "concerning")
-                return rewritten
+                # This would call the real Chrome Nano API from frontend
+                pass
+            
+            # Enhanced fallback implementation
+            rewritten = text
+            
+            # Emergency/disaster context improvements
+            emergency_replacements = {
+                "urgent": "critical",
+                "help": "assistance",
+                "problem": "emergency situation",
+                "bad": "concerning",
+                "need": "require",
+                "quickly": "immediately",
+                "ASAP": "immediately",
+                "broken": "damaged"
+            }
+            
+            for old, new in emergency_replacements.items():
+                rewritten = rewritten.replace(old, new)
+                rewritten = rewritten.replace(old.title(), new.title())
+                rewritten = rewritten.replace(old.upper(), new.upper())
+            
+            # Tone adjustments
+            if tone == "professional":
+                rewritten = rewritten.replace("can't", "cannot")
+                rewritten = rewritten.replace("won't", "will not")
+                rewritten = rewritten.replace("don't", "do not")
+            
+            return rewritten
         except Exception as e:
             print(f"Chrome Nano Rewriter error: {e}")
             return text.replace("urgent", "critical").replace("help", "assistance")
     
     @staticmethod
-    async def translate_text(text, target_language="en", source_language="auto"):
+    def translate_text(text, target_language="en", source_language="auto"):
         """Translate text using Chrome's Translator API"""
         try:
             if hasattr(app, 'chrome_nano_available') and app.chrome_nano_available:
-                return await app.chrome_nano_available.translator.translate(text, {
-                    'targetLanguage': target_language,
-                    'sourceLanguage': source_language
-                })
+                # This would call the real Chrome Nano API from frontend
+                pass
+            
+            # Enhanced fallback implementation with basic translations
+            emergency_translations = {
+                'es': {  # Spanish
+                    'emergency': 'emergencia',
+                    'evacuation': 'evacuación',
+                    'help': 'ayuda',
+                    'danger': 'peligro',
+                    'safety': 'seguridad',
+                    'shelter': 'refugio',
+                    'flood': 'inundación',
+                    'fire': 'fuego',
+                    'earthquake': 'terremoto'
+                },
+                'fr': {  # French
+                    'emergency': 'urgence',
+                    'evacuation': 'évacuation',
+                    'help': 'aide',
+                    'danger': 'danger',
+                    'safety': 'sécurité',
+                    'shelter': 'abri',
+                    'flood': 'inondation',
+                    'fire': 'feu',
+                    'earthquake': 'tremblement de terre'
+                }
+            }
+            
+            if target_language in emergency_translations:
+                translated = text.lower()
+                for en_word, translated_word in emergency_translations[target_language].items():
+                    translated = translated.replace(en_word, translated_word)
+                return translated
             else:
-                # Fallback - return original text
+                # Return original text if no translation available
                 return text
         except Exception as e:
             print(f"Chrome Nano Translator error: {e}")
             return text
     
     @staticmethod
-    async def generate_prompt(context, task_type="rescue", role="coordinator"):
+    def generate_prompt(context, task_type="rescue", role="coordinator"):
         """Generate AI strategies using Chrome's Prompt API"""
         try:
             if hasattr(app, 'chrome_nano_available') and app.chrome_nano_available:
-                return await app.chrome_nano_available.prompt.generate(context, {
-                    'context': 'disaster_management',
-                    'type': task_type,
-                    'role': role
-                })
-            else:
-                # Enhanced fallback implementation
-                prompts = {
-                    "rescue": f"Based on {context}, prioritize rescue operations by: 1) Assessing immediate danger levels, 2) Identifying accessible routes and safe zones, 3) Coordinating team resources and equipment, 4) Establishing communication protocols, 5) Implementing safety measures for responders",
-                    "distribution": f"For {context}, optimize resource distribution by: 1) Calculating demand based on population density and needs, 2) Identifying bottlenecks in supply chains, 3) Ensuring equitable access across all affected areas, 4) Prioritizing vulnerable populations, 5) Establishing distribution checkpoints",
-                    "evacuation": f"Regarding {context}, develop evacuation strategy: 1) Assess immediate threats and timeline, 2) Identify safe evacuation routes and assembly points, 3) Coordinate transportation resources, 4) Communicate with affected populations, 5) Ensure accessibility for all community members",
-                    "communication": f"For {context}, establish communication protocols: 1) Set up emergency communication channels, 2) Coordinate with all response agencies, 3) Ensure multilingual support, 4) Implement redundancy for critical communications, 5) Train personnel on emergency procedures"
+                # This would call the real Chrome Nano API from frontend
+                pass
+            
+            # Enhanced fallback implementation with comprehensive strategies
+            emergency_strategies = {
+                "rescue": {
+                    "coordinator": f"RESCUE COORDINATION STRATEGY for {context}:\n\n1. IMMEDIATE ASSESSMENT\n   • Evaluate life-threatening situations and prioritize by severity\n   • Assess accessibility of affected areas and identify safe approach routes\n   • Determine resource requirements and available rescue teams\n\n2. RESOURCE DEPLOYMENT\n   • Deploy specialized rescue teams based on situation type\n   • Coordinate equipment distribution (medical, extraction, safety)\n   • Establish communication protocols between teams\n\n3. SAFETY PROTOCOLS\n   • Implement safety measures for all responders\n   • Set up emergency evacuation routes for rescue teams\n   • Monitor environmental hazards and changing conditions\n\n4. COORDINATION ACTIVITIES\n   • Establish command center and communication hub\n   • Coordinate with other emergency services\n   • Document rescue operations and maintain situational awareness",
+                    
+                    "responder": f"FIELD RESCUE OPERATIONS for {context}:\n\n1. SITUATION ASSESSMENT\n   • Conduct initial scene survey and identify immediate dangers\n   • Assess victim conditions and prioritize rescue order\n   • Evaluate structural integrity and environmental hazards\n\n2. RESCUE EXECUTION\n   • Follow established safety protocols throughout operation\n   • Use appropriate rescue techniques and equipment\n   • Maintain constant communication with command center\n\n3. MEDICAL PRIORITIES\n   • Provide immediate life-saving interventions\n   • Stabilize victims before transport\n   • Coordinate with medical teams for advanced care",
+                },
+                
+                "distribution": {
+                    "coordinator": f"RESOURCE DISTRIBUTION STRATEGY for {context}:\n\n1. NEEDS ASSESSMENT\n   • Calculate demand based on affected population and duration\n   • Identify vulnerable populations requiring priority assistance\n   • Assess geographic distribution of need across affected areas\n\n2. SUPPLY CHAIN OPTIMIZATION\n   • Identify efficient distribution routes and checkpoints\n   • Coordinate with suppliers and transportation resources\n   • Implement inventory tracking and allocation systems\n\n3. EQUITY AND ACCESS\n   • Ensure fair distribution across all affected communities\n   • Address accessibility challenges for disabled individuals\n   • Provide multilingual support and cultural considerations\n\n4. MONITORING AND ADJUSTMENT\n   • Track distribution progress and identify bottlenecks\n   • Adjust allocation based on changing needs and feedback\n   • Coordinate with other agencies to avoid duplication",
+                },
+                
+                "evacuation": {
+                    "coordinator": f"EVACUATION STRATEGY for {context}:\n\n1. THREAT ASSESSMENT\n   • Analyze immediate and projected threat levels\n   • Determine evacuation timeline and urgency levels\n   • Identify areas of highest risk requiring immediate evacuation\n\n2. ROUTE PLANNING\n   • Map safe evacuation routes and alternative pathways\n   • Identify assembly points and temporary shelters\n   • Coordinate transportation resources and capacity\n\n3. COMMUNICATION\n   • Issue clear evacuation orders through multiple channels\n   • Provide regular updates on evacuation progress\n   • Ensure accessibility for hearing and vision impaired individuals\n\n4. SPECIAL POPULATIONS\n   • Prioritize evacuation of hospitals, schools, and care facilities\n   • Provide assistance for elderly and disabled residents\n   • Account for pets and livestock in evacuation planning",
+                },
+                
+                "communication": {
+                    "coordinator": f"COMMUNICATION STRATEGY for {context}:\n\n1. INFORMATION MANAGEMENT\n   • Establish centralized information collection and verification\n   • Create standardized reporting formats for all agencies\n   • Implement real-time information sharing systems\n\n2. PUBLIC COMMUNICATION\n   • Develop clear, consistent public messaging\n   • Use multiple communication channels (radio, social media, sirens)\n   • Provide regular updates and instructions to affected populations\n\n3. INTERAGENCY COORDINATION\n   • Establish communication protocols between all response agencies\n   • Create backup communication systems for redundancy\n   • Train personnel on emergency communication procedures\n\n4. COMMUNITY ENGAGEMENT\n   • Engage community leaders as communication liaisons\n   • Provide multilingual communication support\n   • Address misinformation and provide accurate updates"
                 }
-                return prompts.get(task_type, f"Analyze {context} and provide comprehensive strategic recommendations for effective disaster response coordination.")
+            }
+            
+            # Get the appropriate strategy
+            if task_type in emergency_strategies and role in emergency_strategies[task_type]:
+                return emergency_strategies[task_type][role]
+            elif task_type in emergency_strategies:
+                # Default to coordinator if specific role not found
+                return emergency_strategies[task_type].get("coordinator", f"Strategy for {context}: Assess situation, deploy resources, ensure safety, coordinate response.")
+            else:
+                # Generic strategy for unknown task types
+                return f"EMERGENCY RESPONSE STRATEGY for {context}:\n\n1. SITUATION ANALYSIS\n   • Assess immediate threats and prioritize response actions\n   • Evaluate available resources and response capabilities\n   • Identify key stakeholders and coordination requirements\n\n2. RESPONSE COORDINATION\n   • Deploy appropriate resources based on situation needs\n   • Establish clear command and control structure\n   • Implement safety protocols for all personnel\n\n3. ONGOING MANAGEMENT\n   • Monitor situation development and adjust response\n   • Maintain situational awareness and communication\n   • Document actions taken and lessons learned"
+                
         except Exception as e:
             print(f"Chrome Nano Prompt Generator error: {e}")
             return f"Based on {context}, here's the recommended strategy: 1) Assess immediate risks, 2) Prioritize critical needs, 3) Coordinate resources effectively."
