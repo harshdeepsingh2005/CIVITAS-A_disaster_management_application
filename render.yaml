@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: civitas-web
+    env: docker
+    plan: free
+    branch: main
+    dockerfilePath: Dockerfile
+    # Build and start are handled by Dockerfile's CMD. You can override in Render UI.
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: CHROME_NANO_ENABLED
+        value: "True"
+      - key: AI_FALLBACK_ENABLED
+        value: "True"
+      # Set DATABASE_URL in the Render Dashboard to the internal Postgres connection string
