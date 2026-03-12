@@ -1,0 +1,13 @@
+[build]
+# Railway auto-detects the Dockerfile in the repo root
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Health check endpoint (Railway pings this to confirm the service is live)
+healthcheckPath = "/login"
+healthcheckTimeout = 300       # seconds to wait for first healthy response
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
+
+# Number of Gunicorn workers is set inside the Dockerfile CMD
+# Override via Railway env: GUNICORN_CMD_ARGS="--workers 2"

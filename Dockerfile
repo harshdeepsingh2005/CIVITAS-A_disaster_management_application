@@ -23,7 +23,7 @@ USER civitas
 
 EXPOSE 5000
 
-# Default to production flask env; override with Render env or docker -e
+# Default to production flask env; override with Railway env or docker -e
 ENV FLASK_ENV=production
 
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
