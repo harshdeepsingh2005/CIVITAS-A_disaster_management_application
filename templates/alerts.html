@@ -9,7 +9,7 @@
         <p>Stay informed with real-time emergency notifications</p>
     </div>
 
-    {% if current_user.role in ['government', 'rescuer'] %}
+    {% if current_user.role == 'government' %}
         <!-- Alert Creation Form -->
         <div class="card">
             <div class="card-header">
@@ -62,7 +62,9 @@
             <h3 class="card-title">📊 Active Alerts</h3>
             <div class="card-actions">
                 <button class="btn btn-secondary" onclick="refreshAlerts()">🔄 Refresh</button>
+                {% if current_user.role == 'government' %}
                 <button class="btn btn-warning" onclick="broadcastToMesh()">📡 Broadcast to Mesh</button>
+                {% endif %}
             </div>
         </div>
         <div class="alerts-list" id="alertsList">

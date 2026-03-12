@@ -371,7 +371,10 @@ def reports_api():
 @app.route('/api/alerts', methods=['GET', 'POST'])
 @login_required
 def alerts_api():
-    if request.method == 'POST' and current_user.role in ['government', 'rescuer']:
+    if request.method == 'POST':
+        if current_user.role != 'government':
+            return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+            
         data = request.get_json()
         alert = Alert(
             title=data['title'],
@@ -734,12 +737,20 @@ def mesh_heartbeat():
 def mesh_send():
     """Send a message to one or all mesh peers via server relay."""
     data = request.get_json() or {}
+    msg_type = data.get('type', 'message')
+    
+    # Logical access control for mesh broadcasts
+    if msg_type in ['alert', 'safehouses'] and current_user.role != 'government':
+        return jsonify({'status': 'error', 'message': 'Unauthorized to broadcast this type'}), 403
+    if msg_type == 'missions' and current_user.role not in ['government', 'rescuer']:
+        return jsonify({'status': 'error', 'message': 'Unauthorized to broadcast missions'}), 403
+
     msg = {
         'id':        str(uuid.uuid4())[:8],
         'from_id':   current_user.id,
         'from_name': current_user.name,
         'from_role': current_user.role,
-        'type':      data.get('type', 'message'),
+        'type':      msg_type,
         'text':      data.get('text', data.get('message', '')),
         'timestamp': datetime.utcnow().isoformat(),
     }
