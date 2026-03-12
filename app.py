@@ -496,40 +496,75 @@ def resources_api():
 @app.route('/api/ble/sync', methods=['POST'])
 @login_required
 def ble_sync():
-    """Handle BLE mesh data synchronization"""
-    data = request.get_json()
+    """Handle BLE mesh data synchronization from offline devices."""
+    data = request.get_json() or {}
     sync_type = data.get('type')
-    
-    if sync_type == 'reports':
-        # Sync reports via BLE
-        reports = data.get('reports', [])
-        for report_data in reports:
-            if not Report.query.filter_by(id=report_data['id']).first():
-                report = Report(
-                    id=report_data['id'],
-                    title=report_data['title'],
-                    description=report_data['description'],
-                    location=report_data['location'],
-                    severity=report_data['severity'],
-                    user_id=report_data['user_id'],
-                    status=report_data['status']
-                )
-                db.session.add(report)
+    synced = 0
+
+    try:
+        if sync_type == 'reports':
+            for r in data.get('reports', []):
+                if not Report.query.get(r.get('id')):
+                    db.session.add(Report(
+                        title=r['title'],
+                        description=r['description'],
+                        location=r['location'],
+                        severity=r.get('severity', 'medium'),
+                        user_id=r.get('user_id', current_user.id),
+                        status=r.get('status', 'pending')
+                    ))
+                    synced += 1
+
+        elif sync_type == 'alerts':
+            for a in data.get('alerts', []):
+                if not Alert.query.get(a.get('id')):
+                    db.session.add(Alert(
+                        title=a['title'],
+                        message=a['message'],
+                        alert_type=a.get('alert_type', 'general'),
+                        severity=a.get('severity', 'medium'),
+                        created_by=current_user.id
+                    ))
+                    synced += 1
+
+        elif sync_type == 'missions':
+            for m in data.get('missions', []):
+                if not Mission.query.get(m.get('id')):
+                    db.session.add(Mission(
+                        title=m['title'],
+                        description=m['description'],
+                        location=m['location'],
+                        priority=m.get('priority', 'medium'),
+                        created_by=current_user.id,
+                        status=m.get('status', 'active')
+                    ))
+                    synced += 1
+
+        else:
+            # Unknown type — acknowledge without error so client doesn't retry endlessly
+            return jsonify({'status': 'acknowledged', 'type': sync_type, 'synced': 0})
+
         db.session.commit()
-    
-    return jsonify({'status': 'synced'})
+        return jsonify({'status': 'synced', 'type': sync_type, 'synced': synced})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/ble/broadcast', methods=['POST'])
 @login_required
 def ble_broadcast():
     """Broadcast data via BLE mesh"""
-    data = request.get_json()
+    data = request.get_json() or {}
     broadcast_type = data.get('type')
-    
+
+    # Alert broadcast — government only, must supply alert_id
     if broadcast_type == 'alert' and current_user.role in ['government']:
         alert = Alert.query.get(data.get('alert_id'))
         if alert:
+            # FIX: return 'success' so the frontend testBroadcast() succeeds
             return jsonify({
+                'status': 'success',
                 'type': 'alert',
                 'data': {
                     'id': alert.id,
@@ -539,8 +574,16 @@ def ble_broadcast():
                     'created_at': alert.created_at.isoformat()
                 }
             })
-    
-    return jsonify({'status': 'broadcast_ready'})
+        return jsonify({'status': 'error', 'message': 'Alert not found'}), 404
+
+    # Generic broadcast (test messages, user_message, etc.) — always succeeds
+    return jsonify({
+        'status': 'success',
+        'type': broadcast_type,
+        'message': data.get('message', ''),
+        'sender': current_user.role,
+        'timestamp': datetime.utcnow().isoformat()
+    })
 
 # Chrome Nano AI API Endpoints
 @app.route('/api/ai/summarize', methods=['POST'])

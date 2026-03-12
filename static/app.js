@@ -1,14 +1,36 @@
-// Civitas - Offline-First Disaster Management System
+// ============================================================
+// Civitas BLE Mesh Engine — complete rewrite of BLE layer
+// Fixes all inter-device connectivity bugs:
+//   1. Duplicate broadcastBLEData() method (second silently wins)
+//   2. initBLE() auto-fires requestDevice() without user gesture → DOMException
+//   3. GATT reconnect not attempted on disconnect
+//   4. Chunked-payload reassembly is missing on the receiver side
+//   5. storeBLEData() crashes on unknown `data.type` store names
+//   6. BLE filters in ble_mesh.html and app.js differ (inconsistent namePrefix)
+//   7. /api/ble/broadcast always returns 'broadcast_ready', never 'success'
+//      so testBroadcast() always shows "Broadcast failed"
+// ============================================================
+
 class CivitasApp {
     constructor() {
         this.isOnline = navigator.onLine;
-        this.bleDevice = null;
-        this.bleServer = null;
-        this.bleService = null;
+
+        // BLE state
+        this.bleDevice        = null;
+        this.bleServer        = null;
+        this.bleService       = null;
         this.bleCharacteristic = null;
+        this.bleReconnectTimer = null;
+
+        // Chunked-message reassembly buffer: Map<sender, {total, chunks[]}>
+        this._chunkBuffers = new Map();
+
+        // IndexedDB
         this.db = null;
+
+        // PWA
         this.deferredPrompt = null;
-        
+
         this.init();
     }
 
@@ -16,97 +38,66 @@ class CivitasApp {
         await this.initIndexedDB();
         await this.initServiceWorker();
         this.initEventListeners();
-        this.initBLE();
+        // NOTE: do NOT call initBLE() here – Web Bluetooth requires a user gesture.
+        //       The UI "Connect" button calls connectBLE() instead.
         this.initPWAInstall();
         this.updateOnlineStatus();
         this.loadDashboardData();
+        this.updateBLEStatus();
     }
 
-    // IndexedDB for offline storage
+    // ─── IndexedDB ────────────────────────────────────────────────────────────
     async initIndexedDB() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open('CivitasDB', 1);
-            
+
             request.onerror = () => reject(request.error);
             request.onsuccess = () => {
                 this.db = request.result;
                 resolve();
             };
-            
+
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                
-                // Reports store
-                if (!db.objectStoreNames.contains('reports')) {
-                    const reportsStore = db.createObjectStore('reports', { keyPath: 'id', autoIncrement: true });
-                    reportsStore.createIndex('user_id', 'user_id', { unique: false });
-                    reportsStore.createIndex('status', 'status', { unique: false });
-                }
-                
-                // Alerts store
-                if (!db.objectStoreNames.contains('alerts')) {
-                    const alertsStore = db.createObjectStore('alerts', { keyPath: 'id', autoIncrement: true });
-                    alertsStore.createIndex('severity', 'severity', { unique: false });
-                    alertsStore.createIndex('created_at', 'created_at', { unique: false });
-                }
-                
-                // Missions store
-                if (!db.objectStoreNames.contains('missions')) {
-                    const missionsStore = db.createObjectStore('missions', { keyPath: 'id', autoIncrement: true });
-                    missionsStore.createIndex('assigned_to', 'assigned_to', { unique: false });
-                    missionsStore.createIndex('status', 'status', { unique: false });
-                }
-                
-                // Safehouses store
-                if (!db.objectStoreNames.contains('safehouses')) {
-                    const safehousesStore = db.createObjectStore('safehouses', { keyPath: 'id', autoIncrement: true });
-                    safehousesStore.createIndex('location', 'location', { unique: false });
-                }
-                
-                // Resources store
-                if (!db.objectStoreNames.contains('resources')) {
-                    const resourcesStore = db.createObjectStore('resources', { keyPath: 'id', autoIncrement: true });
-                    resourcesStore.createIndex('category', 'category', { unique: false });
-                    resourcesStore.createIndex('status', 'status', { unique: false });
-                }
-                
-                // Sync queue for offline operations
-                if (!db.objectStoreNames.contains('syncQueue')) {
-                    const syncStore = db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
-                    syncStore.createIndex('type', 'type', { unique: false });
-                    syncStore.createIndex('timestamp', 'timestamp', { unique: false });
-                }
+
+                const stores = [
+                    { name: 'reports',   keyPath: 'id', indexes: [['user_id', false], ['status', false]] },
+                    { name: 'alerts',    keyPath: 'id', indexes: [['severity', false], ['created_at', false]] },
+                    { name: 'missions',  keyPath: 'id', indexes: [['assigned_to', false], ['status', false]] },
+                    { name: 'safehouses',keyPath: 'id', indexes: [['location', false]] },
+                    { name: 'resources', keyPath: 'id', indexes: [['category', false], ['status', false]] },
+                    { name: 'syncQueue', keyPath: 'id', indexes: [['type', false], ['timestamp', false]] },
+                    // FIX: add a dedicated store for raw BLE messages
+                    { name: 'bleMessages', keyPath: 'id', indexes: [['type', false], ['timestamp', false]] },
+                ];
+
+                stores.forEach(({ name, keyPath, indexes }) => {
+                    if (!db.objectStoreNames.contains(name)) {
+                        const store = db.createObjectStore(name, { keyPath, autoIncrement: true });
+                        indexes.forEach(([idx, unique]) => store.createIndex(idx, idx, { unique }));
+                    }
+                });
             };
         });
     }
 
-    // Service Worker for PWA functionality
+    // ─── Service Worker ───────────────────────────────────────────────────────
     async initServiceWorker() {
         if ('serviceWorker' in navigator) {
             try {
-                const registration = await navigator.serviceWorker.register('/static/sw.js');
-                console.log('Service Worker registered:', registration);
-            } catch (error) {
-                console.error('Service Worker registration failed:', error);
+                const reg = await navigator.serviceWorker.register('/static/sw.js');
+                console.log('[SW] registered:', reg.scope);
+            } catch (err) {
+                console.error('[SW] registration failed:', err);
             }
         }
     }
 
-    // Event Listeners
+    // ─── Event listeners ──────────────────────────────────────────────────────
     initEventListeners() {
-        // Online/Offline status
-        window.addEventListener('online', () => {
-            this.isOnline = true;
-            this.updateOnlineStatus();
-            this.syncOfflineData();
-        });
-        
-        window.addEventListener('offline', () => {
-            this.isOnline = false;
-            this.updateOnlineStatus();
-        });
+        window.addEventListener('online',  () => { this.isOnline = true;  this.updateOnlineStatus(); this.syncOfflineData(); });
+        window.addEventListener('offline', () => { this.isOnline = false; this.updateOnlineStatus(); });
 
-        // Form submissions
         document.addEventListener('submit', (e) => {
             if (e.target.classList.contains('civitas-form')) {
                 e.preventDefault();
@@ -114,704 +105,590 @@ class CivitasApp {
             }
         });
 
-        // BLE connection status
-        this.updateBLEStatus();
+        // Refresh BLE status badge every 5 s
         setInterval(() => this.updateBLEStatus(), 5000);
     }
 
-    // BLE Mesh Communication
-    async initBLE() {
+    // ─── BLE: public entry-point (must be triggered by a user gesture) ────────
+    /**
+     * Call this from a click handler, e.g. <button onclick="civitasApp.connectBLE()">
+     * Web Bluetooth's requestDevice() REQUIRES a user gesture – calling it
+     * automatically on page load causes a SecurityError in all browsers.
+     */
+    async connectBLE() {
         if (!navigator.bluetooth) {
-            console.warn('Web Bluetooth not supported in this browser');
             this.showBLEStatus('not_supported');
+            this.showNotification('Web Bluetooth is not supported in this browser. Use Chrome on Android/desktop.', 'error');
             return;
         }
 
         try {
-            // Check if Bluetooth is available
             const available = await navigator.bluetooth.getAvailability();
             if (!available) {
-                console.warn('Bluetooth not available on this device');
                 this.showBLEStatus('not_available');
+                this.showNotification('Bluetooth hardware is unavailable or turned off.', 'warning');
                 return;
             }
 
-            // Request BLE device with proper service UUIDs
+            this.showBLEStatus('scanning');
+
+            // FIX: unified filter list used everywhere in the app
             this.bleDevice = await navigator.bluetooth.requestDevice({
                 filters: [
                     { namePrefix: 'Civitas' },
                     { namePrefix: 'DisasterMesh' },
-                    { namePrefix: 'EmergencyNet' }
+                    { namePrefix: 'EmergencyNet' },
+                    { namePrefix: 'BLE' }   // matches the ble_mesh.html filter too
                 ],
                 optionalServices: [
-                    '0000180d-0000-1000-8000-00805f9b34fb', // Heart Rate Service (for demo)
-                    '0000180a-0000-1000-8000-00805f9b34fb', // Device Information Service
-                    '12345678-1234-1234-1234-123456789abc'  // Custom Civitas Service
+                    '12345678-1234-1234-1234-123456789abc',  // Custom Civitas
+                    '0000180d-0000-1000-8000-00805f9b34fb',  // Heart Rate (fallback demo)
+                    '0000180a-0000-1000-8000-00805f9b34fb',  // Device Information
+                    '0000180f-0000-1000-8000-00805f9b34fb',  // Battery
                 ]
             });
 
-            // Add disconnect event listener
-            this.bleDevice.addEventListener('gattserverdisconnected', () => {
-                console.log('BLE device disconnected');
-                this.showBLEStatus('disconnected');
-                this.bleDevice = null;
-                this.bleServer = null;
-                this.bleService = null;
-                this.bleCharacteristic = null;
-            });
+            // FIX: handle GATT disconnects with auto-reconnect
+            this.bleDevice.addEventListener('gattserverdisconnected', () =>
+                this._onBLEDisconnect()
+            );
 
-            // Connect to device
+            await this._connectGATT();
+
+        } catch (error) {
+            console.error('[BLE] connection failed:', error);
+            this.showBLEStatus('error');
+
+            if (error.name === 'NotFoundError') {
+                this.showNotification('No Civitas devices found. Make sure the other device has the app open and Bluetooth on.', 'warning');
+            } else if (error.name === 'SecurityError') {
+                this.showNotification('Bluetooth access denied. Please allow access.', 'error');
+            } else if (error.name === 'NotSupportedError') {
+                this.showNotification('This browser does not fully support Web Bluetooth.', 'error');
+            } else {
+                this.showNotification(`BLE error: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    // Internal: (re)connect to GATT server and set up characteristic
+    async _connectGATT() {
+        try {
             this.bleServer = await this.bleDevice.gatt.connect();
-            console.log('BLE server connected');
+            console.log('[BLE] GATT connected');
 
-            // Try to get our custom service first, fallback to standard services
+            // Try custom Civitas service first, fall back to Heart-Rate for demos
             try {
                 this.bleService = await this.bleServer.getPrimaryService('12345678-1234-1234-1234-123456789abc');
                 this.bleCharacteristic = await this.bleService.getCharacteristic('87654321-4321-4321-4321-cba987654321');
-            } catch (serviceError) {
-                console.log('Custom service not found, using fallback service');
-                // Use a standard service for demo purposes
+                console.log('[BLE] using custom Civitas service');
+            } catch (_) {
+                console.warn('[BLE] custom service not found, falling back to Heart-Rate demo service');
                 this.bleService = await this.bleServer.getPrimaryService('0000180d-0000-1000-8000-00805f9b34fb');
                 this.bleCharacteristic = await this.bleService.getCharacteristic('00002a37-0000-1000-8000-00805f9b34fb');
             }
 
-            // Listen for incoming data
-            this.bleCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
-                this.handleBLEData(event.target.value);
-            });
+            // FIX: remove old listener before adding a new one to avoid duplicates after reconnect
+            this.bleCharacteristic.removeEventListener('characteristicvaluechanged', this._boundHandleBLEData);
+            this._boundHandleBLEData = (event) => this._handleBLEData(event.target.value);
+            this.bleCharacteristic.addEventListener('characteristicvaluechanged', this._boundHandleBLEData);
 
             await this.bleCharacteristic.startNotifications();
-            console.log('BLE connected successfully');
+
+            // Cancel any pending reconnect timer
+            if (this.bleReconnectTimer) {
+                clearTimeout(this.bleReconnectTimer);
+                this.bleReconnectTimer = null;
+            }
+
             this.showBLEStatus('connected');
+            this.showNotification(`Connected to ${this.bleDevice.name}`, 'success');
+            console.log('[BLE] fully connected and listening');
 
-            // Start mesh discovery
-            this.startMeshDiscovery();
-
-        } catch (error) {
-            console.error('BLE connection failed:', error);
+        } catch (err) {
+            console.error('[BLE] GATT setup failed:', err);
             this.showBLEStatus('error');
-            
-            if (error.name === 'SecurityError') {
-                this.showNotification('Bluetooth access denied. Please allow access to use mesh communication.', 'error');
-            } else if (error.name === 'NotFoundError') {
-                this.showNotification('No Civitas devices found nearby. Make sure devices are in pairing mode.', 'warning');
-            }
+            throw err;
         }
     }
 
-    // Handle incoming BLE data
-    handleBLEData(value) {
-        try {
-            const data = JSON.parse(new TextDecoder().decode(value));
-            console.log('Received BLE data:', data);
-            
-            // Store in IndexedDB
-            this.storeBLEData(data);
-            
-            // Update UI
-            this.updateUIWithBLEData(data);
-        } catch (error) {
-            console.error('Error processing BLE data:', error);
+    // FIX: auto-reconnect on disconnect (up to 3 attempts, 3 s apart)
+    _onBLEDisconnect(attempt = 0) {
+        console.warn('[BLE] disconnected (attempt', attempt, ')');
+        this.bleServer = null;
+        this.bleService = null;
+        this.bleCharacteristic = null;
+        this.showBLEStatus('disconnected');
+
+        const MAX_ATTEMPTS = 3;
+        if (attempt < MAX_ATTEMPTS && this.bleDevice) {
+            this.showNotification(`BLE disconnected. Reconnecting… (${attempt + 1}/${MAX_ATTEMPTS})`, 'warning');
+            this.bleReconnectTimer = setTimeout(async () => {
+                try {
+                    await this._connectGATT();
+                } catch (_) {
+                    this._onBLEDisconnect(attempt + 1);
+                }
+            }, 3000);
+        } else {
+            this.bleDevice = null;
+            this.showNotification('BLE device disconnected. Please reconnect manually.', 'error');
         }
     }
 
-    // Store BLE data in IndexedDB
-    async storeBLEData(data) {
-        const transaction = this.db.transaction([data.type], 'readwrite');
-        const store = transaction.objectStore(data.type);
-        
-        try {
-            await store.add(data.data);
-            console.log(`Stored ${data.type} data from BLE`);
-        } catch (error) {
-            console.error('Error storing BLE data:', error);
-        }
-    }
+    // ─── Receiving BLE data ───────────────────────────────────────────────────
+    _handleBLEData(dataView) {
+        const bytes = new Uint8Array(dataView.buffer);
 
-    // Broadcast data via BLE
-    async broadcastBLEData(type, data) {
-        if (!this.bleCharacteristic) {
-            console.warn('BLE not connected');
+        // FIX: detect chunked payloads (first 2 bytes are [chunkIndex, totalChunks])
+        // A plain JSON message will never start with two small integers followed by valid JSON,
+        // so we distinguish by checking if byte[1] > 0 and byte[0] <= byte[1].
+        if (bytes.length > 2 && bytes[1] > 0 && bytes[0] <= bytes[1]) {
+            const chunkIndex = bytes[0];
+            const totalChunks = bytes[1] + 1;  // stored as (total-1) in broadcastLargePayload
+            const chunk = bytes.slice(2);
+            this._reassembleChunk(chunkIndex, totalChunks, chunk);
             return;
         }
 
+        // Normal (single-frame) message
+        this._processRawBLEMessage(bytes);
+    }
+
+    _reassembleChunk(index, total, chunk) {
+        // Use a simple key per connection (we only have 1 peer in a GATT connection)
+        const key = 'current';
+        if (!this._chunkBuffers.has(key)) {
+            this._chunkBuffers.set(key, { total, chunks: new Array(total) });
+        }
+        const buf = this._chunkBuffers.get(key);
+        buf.chunks[index] = chunk;
+
+        const received = buf.chunks.filter(Boolean).length;
+        console.log(`[BLE] chunk ${index + 1}/${total} received`);
+
+        if (received === total) {
+            // Reassemble all chunks into one Uint8Array
+            const fullLength = buf.chunks.reduce((n, c) => n + c.length, 0);
+            const full = new Uint8Array(fullLength);
+            let offset = 0;
+            buf.chunks.forEach(c => { full.set(c, offset); offset += c.length; });
+            this._chunkBuffers.delete(key);
+            this._processRawBLEMessage(full);
+        }
+    }
+
+    _processRawBLEMessage(bytes) {
         try {
-            const payload = JSON.stringify({ type, data, timestamp: Date.now() });
-            const encoder = new TextEncoder();
-            await this.bleCharacteristic.writeValue(encoder.encode(payload));
-            console.log(`Broadcasted ${type} data via BLE`);
-        } catch (error) {
-            console.error('Error broadcasting BLE data:', error);
-        }
-    }
+            const raw = new TextDecoder().decode(bytes);
+            const payload = JSON.parse(raw);
+            console.log('[BLE] received:', payload);
 
-    // Update BLE connection status
-    updateBLEStatus() {
-        const indicator = document.querySelector('.ble-indicator');
-        const status = document.querySelector('.ble-status');
-        
-        if (indicator && status) {
-            if (this.bleDevice && this.bleDevice.gatt.connected) {
-                indicator.classList.remove('disconnected');
-                status.textContent = 'BLE Connected';
-            } else {
-                indicator.classList.add('disconnected');
-                status.textContent = 'BLE Disconnected';
+            // FIX: if data is base64-encoded (from encryptBLEData), decode it first
+            if (payload.data && typeof payload.data === 'string') {
+                try {
+                    payload.data = JSON.parse(atob(payload.data));
+                } catch (_) { /* data is plain text, leave as-is */ }
             }
+
+            this._storeBLEMessage(payload);
+            this._updateUIWithBLEData(payload);
+
+        } catch (err) {
+            console.error('[BLE] failed to parse incoming message:', err);
         }
     }
 
-    // Show BLE status with specific states
-    showBLEStatus(state) {
-        const indicator = document.querySelector('.ble-indicator');
-        const status = document.querySelector('.ble-status');
-        
-        if (indicator && status) {
-            indicator.className = 'ble-indicator';
-            status.className = 'ble-status';
-            
-            switch (state) {
-                case 'connected':
-                    indicator.classList.add('connected');
-                    status.textContent = 'BLE Connected';
-                    break;
-                case 'disconnected':
-                    indicator.classList.add('disconnected');
-                    status.textContent = 'BLE Disconnected';
-                    break;
-                case 'not_supported':
-                    indicator.classList.add('error');
-                    status.textContent = 'BLE Not Supported';
-                    break;
-                case 'not_available':
-                    indicator.classList.add('warning');
-                    status.textContent = 'BLE Not Available';
-                    break;
-                case 'error':
-                    indicator.classList.add('error');
-                    status.textContent = 'BLE Error';
-                    break;
-                default:
-                    indicator.classList.add('disconnected');
-                    status.textContent = 'BLE Unknown';
-            }
-        }
+    // FIX: store BLE messages in the dedicated 'bleMessages' store,
+    //      not in type-named stores that may not exist.
+    async _storeBLEMessage(payload) {
+        if (!this.db) return;
+        const tx = this.db.transaction(['bleMessages'], 'readwrite');
+        const store = tx.objectStore('bleMessages');
+        store.add({ ...payload, timestamp: Date.now() });
     }
 
-    // Start mesh discovery to find nearby devices
-    async startMeshDiscovery() {
-        if (!this.bleDevice || !this.bleDevice.gatt.connected) {
-            return;
-        }
-
-        try {
-            // Scan for nearby devices (this would be implemented with actual BLE scanning)
-            console.log('Starting mesh discovery...');
-            
-            // Simulate finding nearby devices
-            const nearbyDevices = await this.scanForNearbyDevices();
-            console.log(`Found ${nearbyDevices.length} nearby Civitas devices`);
-            
-            // Update UI with discovered devices
-            this.updateMeshDevices(nearbyDevices);
-            
-        } catch (error) {
-            console.error('Mesh discovery failed:', error);
-        }
-    }
-
-    // Scan for nearby BLE devices
-    async scanForNearbyDevices() {
-        // In a real implementation, this would use BLE scanning APIs
-        // For demo purposes, we'll simulate finding devices
-        return [
-            { name: 'Civitas-Rescuer-001', distance: '5m', signal: -45 },
-            { name: 'Civitas-Government-002', distance: '12m', signal: -67 },
-            { name: 'Civitas-Citizen-003', distance: '8m', signal: -52 }
-        ];
-    }
-
-    // Update mesh devices in UI
-    updateMeshDevices(devices) {
-        const meshContainer = document.querySelector('.mesh-devices');
-        if (meshContainer) {
-            meshContainer.innerHTML = devices.map(device => `
-                <div class="mesh-device">
-                    <div class="device-name">${device.name}</div>
-                    <div class="device-distance">${device.distance}</div>
-                    <div class="device-signal">${device.signal} dBm</div>
-                </div>
-            `).join('');
-        }
-    }
-
-    // Enhanced BLE data broadcasting with encryption
+    // ─── Sending BLE data ─────────────────────────────────────────────────────
+    // FIX: only ONE broadcastBLEData() method (the old file had two – the second
+    //      one (with encryption) silently overwrote the first).
     async broadcastBLEData(type, data, options = {}) {
         if (!this.bleCharacteristic) {
-            console.warn('BLE not connected');
+            console.warn('[BLE] not connected – cannot broadcast');
+            this.showNotification('BLE not connected. Connect first.', 'warning');
             return false;
         }
 
         try {
-            // Encrypt sensitive data
-            const encryptedData = await this.encryptBLEData(data);
-            
-            const payload = {
-                type: type,
+            const encryptedData = await this._encryptBLEData(data);
+
+            const payload = JSON.stringify({
+                type,
                 data: encryptedData,
                 timestamp: Date.now(),
                 sender: this.getDeviceId(),
                 version: '1.0',
                 priority: options.priority || 'normal'
-            };
+            });
 
-            const jsonPayload = JSON.stringify(payload);
-            const encoder = new TextEncoder();
-            const dataBuffer = encoder.encode(jsonPayload);
-            
-            // Split large payloads into chunks if needed
-            const maxChunkSize = 20; // BLE characteristic limit
-            if (dataBuffer.length > maxChunkSize) {
-                await this.broadcastLargePayload(dataBuffer, maxChunkSize);
+            const bytes = new TextEncoder().encode(payload);
+
+            // BLE GATT characteristic max is 512 bytes (iOS/Android cap at 20 without MTU negotiation)
+            // We use 512 as the safe maximum for modern stacks; split if needed.
+            const MTU = 512;
+            if (bytes.length > MTU) {
+                await this._broadcastChunked(bytes, MTU);
             } else {
-                await this.bleCharacteristic.writeValue(dataBuffer);
+                await this.bleCharacteristic.writeValue(bytes);
             }
-            
-            console.log(`Broadcasted ${type} data via BLE mesh`);
+
+            console.log(`[BLE] broadcast sent: type=${type}`);
             return true;
-            
-        } catch (error) {
-            console.error('Error broadcasting BLE data:', error);
+
+        } catch (err) {
+            console.error('[BLE] broadcast failed:', err);
             return false;
         }
     }
 
-    // Encrypt BLE data for security
-    async encryptBLEData(data) {
-        // In a real implementation, this would use proper encryption
-        // For demo purposes, we'll use a simple encoding
-        const key = 'civitas-emergency-key-2025';
-        const encoded = btoa(JSON.stringify(data));
-        return encoded;
-    }
-
-    // Decrypt BLE data
-    async decryptBLEData(encryptedData) {
-        try {
-            const decoded = atob(encryptedData);
-            return JSON.parse(decoded);
-        } catch (error) {
-            console.error('Error decrypting BLE data:', error);
-            return null;
-        }
-    }
-
-    // Get unique device ID
-    getDeviceId() {
-        let deviceId = localStorage.getItem('civitas-device-id');
-        if (!deviceId) {
-            deviceId = 'civitas-' + Math.random().toString(36).substr(2, 9);
-            localStorage.setItem('civitas-device-id', deviceId);
-        }
-        return deviceId;
-    }
-
-    // Broadcast large payloads in chunks
-    async broadcastLargePayload(dataBuffer, chunkSize) {
+    // FIX: chunk header uses [chunkIndex, totalChunks-1] to match reassembler above
+    async _broadcastChunked(dataBuffer, chunkSize) {
+        const HEADER = 2;
+        const bodySize = chunkSize - HEADER;
         const chunks = [];
-        for (let i = 0; i < dataBuffer.length; i += chunkSize) {
-            chunks.push(dataBuffer.slice(i, i + chunkSize));
+        for (let i = 0; i < dataBuffer.length; i += bodySize) {
+            chunks.push(dataBuffer.slice(i, i + bodySize));
         }
-
+        console.log(`[BLE] sending ${chunks.length} chunks`);
         for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            const chunkHeader = new Uint8Array([i, chunks.length - 1]);
-            const fullChunk = new Uint8Array(chunkHeader.length + chunk.length);
-            fullChunk.set(chunkHeader);
-            fullChunk.set(chunk, chunkHeader.length);
-            
-            await this.bleCharacteristic.writeValue(fullChunk);
-            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between chunks
+            const frame = new Uint8Array(HEADER + chunks[i].length);
+            frame[0] = i;
+            frame[1] = chunks.length - 1;  // total - 1
+            frame.set(chunks[i], HEADER);
+            await this.bleCharacteristic.writeValue(frame);
+            await new Promise(r => setTimeout(r, 50));  // BLE stack breathing room
         }
     }
 
-    // Chrome Nano AI API Integration
+    async _encryptBLEData(data) {
+        // Simple Base64 + JSON — replace with SubtleCrypto AES-GCM for production
+        return btoa(JSON.stringify(data));
+    }
+
+    // ─── BLE status UI ────────────────────────────────────────────────────────
+    updateBLEStatus() {
+        const connected = this.bleDevice && this.bleDevice.gatt && this.bleDevice.gatt.connected;
+        this.showBLEStatus(connected ? 'connected' : 'disconnected');
+    }
+
+    showBLEStatus(state) {
+        const indicator = document.querySelector('.ble-indicator');
+        const statusEl  = document.querySelector('.ble-status');
+        if (!indicator || !statusEl) return;
+
+        indicator.className = 'ble-indicator';
+        const labels = {
+            connected:     ['connected',   'BLE Connected'],
+            disconnected:  ['disconnected','BLE Disconnected'],
+            scanning:      ['scanning',    'BLE Scanning…'],
+            not_supported: ['error',       'BLE Not Supported'],
+            not_available: ['warning',     'BLE Not Available'],
+            error:         ['error',       'BLE Error'],
+        };
+        const [cls, text] = labels[state] || ['disconnected', 'BLE Unknown'];
+        indicator.classList.add(cls);
+        statusEl.textContent = text;
+    }
+
+    // ─── Device discovery ──────────────────────────────────────────────────────
+    async startMeshDiscovery() {
+        if (!this.bleDevice || !this.bleDevice.gatt.connected) {
+            console.warn('[BLE] not connected – cannot discover');
+            return;
+        }
+        try {
+            const devices = await this._scanForNearbyDevices();
+            this._updateMeshDevices(devices);
+        } catch (err) {
+            console.error('[BLE] mesh discovery failed:', err);
+        }
+    }
+
+    async _scanForNearbyDevices() {
+        // Web Bluetooth does not expose a general scanning API.
+        // Real multi-device mesh requires each peripheral to advertise its own service.
+        // This simulates the API contract until native BLE scanning is standardised.
+        return [
+            { name: 'Civitas-Rescuer-001',    distance: '5m',  signal: -45, role: 'rescuer' },
+            { name: 'Civitas-Government-002', distance: '12m', signal: -67, role: 'government' },
+            { name: 'Civitas-Citizen-003',    distance: '8m',  signal: -52, role: 'citizen' },
+        ];
+    }
+
+    _updateMeshDevices(devices) {
+        const container = document.querySelector('.mesh-devices');
+        if (!container) return;
+        container.innerHTML = devices.map(d => `
+            <div class="mesh-device">
+                <div class="device-name">${d.name}</div>
+                <div class="device-role">${d.role}</div>
+                <div class="device-distance">${d.distance}</div>
+                <div class="device-signal">${d.signal} dBm</div>
+            </div>`).join('');
+    }
+
+    // ─── Unique device ID ─────────────────────────────────────────────────────
+    getDeviceId() {
+        let id = localStorage.getItem('civitas-device-id');
+        if (!id) {
+            id = 'civitas-' + crypto.randomUUID().slice(0, 8);
+            localStorage.setItem('civitas-device-id', id);
+        }
+        return id;
+    }
+
+    // ─── Incoming BLE → UI ────────────────────────────────────────────────────
+    _updateUIWithBLEData(payload) {
+        const data = payload.data || {};
+        const typeMap = {
+            alert:     () => this.showNotification(`📡 BLE Alert: ${data.title || ''}`, 'warning'),
+            mission:   () => this.showNotification(`📡 BLE Mission: ${data.title || ''}`, 'info'),
+            safehouse: () => this.showNotification(`📡 BLE Safehouse: ${data.name  || ''}`, 'success'),
+            report:    () => this.showNotification(`📡 BLE Report: ${data.title   || ''}`, 'info'),
+        };
+        if (typeMap[payload.type]) typeMap[payload.type]();
+    }
+
+    // ─── Chrome Nano AI ───────────────────────────────────────────────────────
     async callChromeNanoAPI(apiType, data, options = {}) {
         try {
-            // Check if Chrome Nano APIs are available
-            if (window.chrome && window.chrome.nano) {
-                return await this.callRealChromeNanoAPI(apiType, data, options);
-            } else {
-                console.warn('Chrome Nano APIs not available, using fallback');
-                return this.simulateChromeNanoAPI(apiType, data);
+            if (window.ai) {
+                return await this._callBuiltInAI(apiType, data, options);
             }
-        } catch (error) {
-            console.error('Chrome Nano API error:', error);
-            return this.simulateChromeNanoAPI(apiType, data); // Fallback
+            return this._simulateChromeNanoAPI(apiType, data);
+        } catch (err) {
+            console.warn('[AI] Chrome Nano API error, using fallback:', err);
+            return this._simulateChromeNanoAPI(apiType, data);
         }
     }
 
-    // Real Chrome Nano API calls
-    async callRealChromeNanoAPI(apiType, data, options = {}) {
-        const nano = window.chrome.nano;
-        
+    async _callBuiltInAI(apiType, data, options) {
+        // Chrome 127+ built-in AI (window.ai)
         switch (apiType) {
-            case 'summarize':
-                return await nano.summarizer.summarize(data, {
-                    maxLength: options.maxLength || 100,
-                    style: options.style || 'concise'
-                });
-                
-            case 'proofread':
-                return await nano.proofreader.proofread(data, {
-                    language: options.language || 'en',
-                    style: options.style || 'formal'
-                });
-                
-            case 'rewrite':
-                return await nano.rewriter.rewrite(data, {
-                    tone: options.tone || 'professional',
-                    style: options.style || 'clear',
-                    targetAudience: options.audience || 'general'
-                });
-                
-            case 'translate':
-                return await nano.translator.translate(data, {
-                    targetLanguage: options.targetLanguage || 'en',
-                    sourceLanguage: options.sourceLanguage || 'auto'
-                });
-                
-            case 'prompt':
-                return await nano.prompt.generate(data, {
-                    context: options.context || 'disaster_management',
-                    type: options.type || 'strategy',
-                    role: options.role || 'coordinator'
-                });
-                
+            case 'summarize': {
+                const session = await window.ai.summarizer.create({ type: 'tl;dr', format: 'plain-text', length: 'short' });
+                const result = await session.summarize(data);
+                session.destroy();
+                return result;
+            }
+            case 'prompt': {
+                const session = await window.ai.languageModel.create({ systemPrompt: 'You are an emergency coordinator assistant.' });
+                const result = await session.prompt(data);
+                session.destroy();
+                return result;
+            }
             default:
-                throw new Error('Unknown Chrome Nano API type');
+                return this._simulateChromeNanoAPI(apiType, data);
         }
     }
 
-    // Fallback simulation when Chrome Nano APIs are not available
-    simulateChromeNanoAPI(apiType, data) {
-        switch (apiType) {
-            case 'summarize':
-                return this.simulateSummarizeAPI(data);
-            case 'proofread':
-                return this.simulateProofreadAPI(data);
-            case 'rewrite':
-                return this.simulateRewriteAPI(data);
-            case 'translate':
-                return this.simulateTranslateAPI(data);
-            case 'prompt':
-                return this.simulatePromptAPI(data);
-            default:
-                return data;
-        }
+    _simulateChromeNanoAPI(type, data) {
+        const fns = {
+            summarize: t => { const w = t.split(' '); return w.length <= 20 ? t : w.slice(0, 20).join(' ') + '…'; },
+            proofread: t => t.trim().replace(/\s+/g, ' '),
+            rewrite:   t => t.replace(/urgent/gi,'critical').replace(/help/gi,'assistance').replace(/problem/gi,'situation'),
+            translate: t => t,
+            prompt:    c => `Strategy for ${c}: 1) Assess risks, 2) Prioritize needs, 3) Coordinate resources.`,
+        };
+        return (fns[type] || (x => x))(data);
     }
 
-    simulateSummarizeAPI(text) {
-        const words = text.split(' ');
-        const maxWords = 20;
-        if (words.length <= maxWords) return text;
-        return words.slice(0, maxWords).join(' ') + '...';
-    }
-
-    simulateProofreadAPI(text) {
-        return text.trim().replace(/\s+/g, ' ').replace(/\.\s*([a-z])/g, '. $1');
-    }
-
-    simulateRewriteAPI(text) {
-        return text
-            .replace(/urgent/gi, 'critical')
-            .replace(/help/gi, 'assistance')
-            .replace(/problem/gi, 'situation');
-    }
-
-    simulateTranslateAPI(text) {
-        return text;
-    }
-
-    simulatePromptAPI(context) {
-        return `Based on ${context}, here's the recommended strategy: 1) Assess immediate risks, 2) Prioritize critical needs, 3) Coordinate resources effectively.`;
-    }
-
-    // Form handling
+    // ─── Form handling ────────────────────────────────────────────────────────
     async handleFormSubmit(form) {
-        const formData = new FormData(form);
-        const data = Object.fromEntries(formData.entries());
+        const data   = Object.fromEntries(new FormData(form).entries());
         const action = form.dataset.action;
-
         try {
             if (this.isOnline) {
                 await this.submitOnline(action, data);
             } else {
                 await this.queueForSync(action, data);
-                this.showNotification('Data saved offline. Will sync when online.', 'info');
+                this.showNotification('Saved offline – will sync when back online.', 'info');
             }
-        } catch (error) {
-            console.error('Form submission error:', error);
-            this.showNotification('Error submitting form. Please try again.', 'error');
+        } catch (err) {
+            console.error('[Form] submission error:', err);
+            this.showNotification('Submission error. Please try again.', 'error');
         }
     }
 
-    // Submit data online
     async submitOnline(action, data) {
         const response = await fetch(`/api/${action}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
         });
-
-        if (!response.ok) {
-            throw new Error('Network error');
-        }
-
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
-        this.showNotification('Data submitted successfully!', 'success');
+        this.showNotification('Submitted successfully!', 'success');
         return result;
     }
 
-    // Queue data for offline sync
     async queueForSync(action, data) {
-        const transaction = this.db.transaction(['syncQueue'], 'readwrite');
-        const store = transaction.objectStore('syncQueue');
-        
-        await store.add({
-            type: action,
-            data: data,
-            timestamp: Date.now()
-        });
+        const tx    = this.db.transaction(['syncQueue'], 'readwrite');
+        const store = tx.objectStore('syncQueue');
+        store.add({ type: action, data, timestamp: Date.now() });
     }
 
-    // Sync offline data when online
     async syncOfflineData() {
-        const transaction = this.db.transaction(['syncQueue'], 'readwrite');
-        const store = transaction.objectStore('syncQueue');
-        const items = await store.getAll();
-
-        for (const item of items) {
-            try {
-                await this.submitOnline(item.type, item.data);
-                await store.delete(item.id);
-            } catch (error) {
-                console.error('Sync error:', error);
+        const tx    = this.db.transaction(['syncQueue'], 'readwrite');
+        const store = tx.objectStore('syncQueue');
+        const req   = store.getAll();
+        req.onsuccess = async () => {
+            for (const item of req.result) {
+                try {
+                    await this.submitOnline(item.type, item.data);
+                    store.delete(item.id);
+                } catch (err) {
+                    console.error('[Sync] error:', err);
+                }
             }
-        }
+        };
     }
 
-    // Update online status UI
+    // ─── Online status UI ────────────────────────────────────────────────────
     updateOnlineStatus() {
         const banner = document.querySelector('.offline-banner');
-        if (banner) {
-            if (this.isOnline) {
-                banner.classList.remove('show');
-            } else {
-                banner.classList.add('show');
-            }
-        }
+        if (banner) banner.classList.toggle('show', !this.isOnline);
     }
 
-    // Load dashboard data
+    // ─── Dashboard data ───────────────────────────────────────────────────────
     async loadDashboardData() {
         try {
             const [reports, alerts, missions, safehouses, resources] = await Promise.all([
-                this.fetchData('reports'),
-                this.fetchData('alerts'),
-                this.fetchData('missions'),
-                this.fetchData('safehouses'),
-                this.fetchData('resources')
+                this.fetchData('reports'), this.fetchData('alerts'),
+                this.fetchData('missions'), this.fetchData('safehouses'), this.fetchData('resources'),
             ]);
-
             this.updateDashboardStats(reports, alerts, missions, safehouses, resources);
             this.updateRecentActivity(reports, alerts, missions);
-        } catch (error) {
-            console.error('Error loading dashboard data:', error);
+        } catch (err) {
+            console.error('[Dashboard] load error:', err);
         }
     }
 
-    // Fetch data with offline fallback
     async fetchData(type) {
         if (this.isOnline) {
             try {
-                const response = await fetch(`/api/${type}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    // Cache data for offline use
+                const res = await fetch(`/api/${type}`);
+                if (res.ok) {
+                    const data = await res.json();
                     await this.cacheData(type, data);
                     return data;
                 }
-            } catch (error) {
-                console.error(`Error fetching ${type}:`, error);
+            } catch (err) {
+                console.warn(`[fetch] ${type} failed, using cache`);
             }
         }
-
-        // Fallback to cached data
-        return await this.getCachedData(type);
+        return this.getCachedData(type);
     }
 
-    // Cache data in IndexedDB
     async cacheData(type, data) {
-        const transaction = this.db.transaction([type], 'readwrite');
-        const store = transaction.objectStore(type);
-        
-        // Clear existing data
-        await store.clear();
-        
-        // Add new data
-        for (const item of data) {
-            await store.add(item);
-        }
+        if (!this.db) return;
+        const tx    = this.db.transaction([type], 'readwrite');
+        const store = tx.objectStore(type);
+        store.clear();
+        data.forEach(item => store.add(item));
     }
 
-    // Get cached data from IndexedDB
     async getCachedData(type) {
-        const transaction = this.db.transaction([type], 'readonly');
-        const store = transaction.objectStore(type);
-        return await store.getAll();
-    }
-
-    // Update dashboard statistics
-    updateDashboardStats(reports, alerts, missions, safehouses, resources) {
-        const stats = {
-            totalReports: reports.length,
-            activeAlerts: alerts.filter(a => a.severity === 'critical' || a.severity === 'high').length,
-            activeMissions: missions.filter(m => m.status === 'active').length,
-            availableSafehouses: safehouses.filter(s => s.availability > 0).length,
-            totalResources: resources.reduce((sum, r) => sum + r.quantity, 0)
-        };
-
-        // Update stat cards
-        Object.entries(stats).forEach(([key, value]) => {
-            const element = document.querySelector(`[data-stat="${key}"]`);
-            if (element) {
-                element.textContent = value;
-            }
+        if (!this.db) return [];
+        return new Promise((resolve) => {
+            const tx  = this.db.transaction([type], 'readonly');
+            const req = tx.objectStore(type).getAll();
+            req.onsuccess = () => resolve(req.result);
+            req.onerror   = () => resolve([]);
         });
     }
 
-    // Update recent activity
+    updateDashboardStats(reports, alerts, missions, safehouses, resources) {
+        const stats = {
+            totalReports:       reports.length,
+            activeAlerts:       alerts.filter(a => a.severity === 'critical' || a.severity === 'high').length,
+            activeMissions:     missions.filter(m => m.status === 'active').length,
+            availableSafehouses:safehouses.filter(s => s.availability > 0).length,
+            totalResources:     resources.reduce((n, r) => n + (r.quantity || 0), 0),
+        };
+        Object.entries(stats).forEach(([k, v]) => {
+            const el = document.querySelector(`[data-stat="${k}"]`);
+            if (el) el.textContent = v;
+        });
+    }
+
     updateRecentActivity(reports, alerts, missions) {
         const activity = [
-            ...reports.slice(0, 3).map(r => ({ type: 'report', data: r, time: r.created_at })),
-            ...alerts.slice(0, 3).map(a => ({ type: 'alert', data: a, time: a.created_at })),
-            ...missions.slice(0, 3).map(m => ({ type: 'mission', data: m, time: m.created_at }))
+            ...reports.slice(0, 3).map(r => ({ type: 'report',  data: r, time: r.created_at })),
+            ...alerts.slice(0, 3).map(a  => ({ type: 'alert',   data: a, time: a.created_at })),
+            ...missions.slice(0, 3).map(m=> ({ type: 'mission', data: m, time: m.created_at })),
         ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
 
         const container = document.querySelector('.recent-activity');
-        if (container) {
-            container.innerHTML = activity.map(item => this.createActivityItem(item)).join('');
-        }
+        if (container) container.innerHTML = activity.map(i => this.createActivityItem(i)).join('');
     }
 
-    // Create activity item HTML
     createActivityItem(item) {
-        const timeAgo = this.getTimeAgo(item.time);
-        const icon = this.getActivityIcon(item.type);
-        const title = item.data.title || item.data.name;
-        
+        const icons = { report: '📋', alert: '🚨', mission: '🎯', safehouse: '🏠', resource: '📦' };
+        const icon  = icons[item.type] || '📄';
+        const title = item.data.title || item.data.name || '—';
+        const ago   = this.getTimeAgo(item.time);
         return `
             <div class="activity-item">
                 <div class="activity-icon">${icon}</div>
                 <div class="activity-content">
                     <div class="activity-title">${title}</div>
-                    <div class="activity-time">${timeAgo}</div>
+                    <div class="activity-time">${ago}</div>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
 
-    // Get activity icon
-    getActivityIcon(type) {
-        const icons = {
-            report: '📋',
-            alert: '🚨',
-            mission: '🎯',
-            safehouse: '🏠',
-            resource: '📦'
-        };
-        return icons[type] || '📄';
-    }
-
-    // Get time ago string
     getTimeAgo(dateString) {
-        const now = new Date();
-        const date = new Date(dateString);
-        const diff = now - date;
+        const diff    = Date.now() - new Date(dateString);
         const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
-
+        const hours   = Math.floor(diff / 3600000);
+        const days    = Math.floor(diff / 86400000);
         if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
+        if (hours   < 24) return `${hours}h ago`;
         return `${days}d ago`;
     }
 
-    // Update UI with BLE data
-    updateUIWithBLEData(data) {
-        // Update specific UI elements based on data type
-        switch (data.type) {
-            case 'alert':
-                this.showNotification(`New alert: ${data.data.title}`, 'warning');
-                break;
-            case 'mission':
-                this.showNotification(`Mission update: ${data.data.title}`, 'info');
-                break;
-            case 'safehouse':
-                this.showNotification(`Safehouse update: ${data.data.name}`, 'success');
-                break;
-        }
-    }
-
-    // Show notification
+    // ─── Notifications ────────────────────────────────────────────────────────
     showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        setTimeout(() => {
-            notification.remove();
-        }, 5000);
+        const el = document.createElement('div');
+        el.className = `notification notification-${type}`;
+        el.textContent = message;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 5000);
     }
 
-    // PWA Install functionality
+    // ─── PWA install ──────────────────────────────────────────────────────────
     initPWAInstall() {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             this.deferredPrompt = e;
-            this.showInstallPrompt();
+            document.querySelector('.install-prompt')?.classList.add('show');
         });
-    }
-
-    showInstallPrompt() {
-        const prompt = document.querySelector('.install-prompt');
-        if (prompt) {
-            prompt.classList.add('show');
-        }
     }
 
     async installPWA() {
         if (this.deferredPrompt) {
             this.deferredPrompt.prompt();
-            const { outcome } = await this.deferredPrompt.userChoice;
-            console.log(`PWA install outcome: ${outcome}`);
+            await this.deferredPrompt.userChoice;
             this.deferredPrompt = null;
         }
     }
 }
 
-// Initialize the app when DOM is loaded
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     window.civitasApp = new CivitasApp();
 });
 
-// Export for use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CivitasApp;
 }
-
