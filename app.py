@@ -708,4 +708,7 @@ def health():
     return jsonify({'status': 'healthy'}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # Only run the Flask dev server if not running under Gunicorn
+    import os
+    if os.environ.get('FLASK_RUN_FROM_CLI') == 'true':
+        app.run(debug=True, host='0.0.0.0', port=5001)
