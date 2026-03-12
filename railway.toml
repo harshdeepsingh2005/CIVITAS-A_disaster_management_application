@@ -4,7 +4,7 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 # Health check endpoint (Railway pings this to confirm the service is live)
-healthcheckPath = "/login"
+healthcheckPath = "/health"
 healthcheckTimeout = 300       # seconds to wait for first healthy response
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5

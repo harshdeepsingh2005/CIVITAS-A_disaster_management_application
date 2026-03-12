@@ -21,9 +21,12 @@ COPY . .
 RUN useradd -m civitas && chown -R civitas /app
 USER civitas
 
-EXPOSE 5000
+# Railway injects PORT at runtime; default to 5000 for local Docker builds
+ENV PORT=5000
+EXPOSE ${PORT}
 
 # Default to production flask env; override with Railway env or docker -e
 ENV FLASK_ENV=production
 
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
+# Shell form so $PORT is expanded at runtime
+CMD gunicorn -w 4 -b 0.0.0.0:${PORT} app:app
