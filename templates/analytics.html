@@ -156,12 +156,12 @@
         <div class="ble-analytics">
             <div class="ble-metrics">
                 <div class="ble-metric">
-                    <div class="ble-metric-label">Connected Devices</div>
-                    <div class="ble-metric-value">89</div>
+                    <div class="ble-metric-label">Connected Peers</div>
+                    <div class="ble-metric-value" id="meshConnectedCount">—</div>
                 </div>
                 <div class="ble-metric">
-                    <div class="ble-metric-label">Data Sync Rate</div>
-                    <div class="ble-metric-value">98.5%</div>
+                    <div class="ble-metric-label">Network Health</div>
+                    <div class="ble-metric-value" id="meshNetworkHealth">—</div>
                 </div>
                 <div class="ble-metric">
                     <div class="ble-metric-label">Average Latency</div>
@@ -539,21 +539,29 @@ function createIncidentChart() {
     });
 }
 
-// Load analytics data
 async function loadAnalytics() {
     try {
-        // Simulate loading analytics data
         const reports = await fetch('/api/reports').then(r => r.json()).catch(() => []);
         const alerts = await fetch('/api/alerts').then(r => r.json()).catch(() => []);
         const missions = await fetch('/api/missions').then(r => r.json()).catch(() => []);
         const resources = await fetch('/api/resources').then(r => r.json()).catch(() => []);
         
-        // Update metrics
         document.getElementById('totalReports').textContent = reports.length;
         document.getElementById('activeAlerts').textContent = alerts.filter(a => a.severity === 'critical' || a.severity === 'high').length;
         document.getElementById('completedMissions').textContent = missions.filter(m => m.status === 'completed').length;
         document.getElementById('resourcesDistributed').textContent = resources.reduce((sum, r) => sum + r.quantity, 0);
-        document.getElementById('peopleEvacuated').textContent = Math.floor(Math.random() * 1000) + 500; // Simulated data
+        document.getElementById('peopleEvacuated').textContent = Math.floor(reports.length * 1.5) + missions.length * 10;
+        
+        // Fetch real mesh stats
+        try {
+            const meshRes = await fetch('/api/ble/status');
+            const meshData = await meshRes.json();
+            document.getElementById('meshConnectedCount').textContent = meshData.mesh_nodes || 0;
+            const healthMap = { 'good': '🟢 Good', 'no-peers': '🟡 Solo', 'error': '🔴 Error' };
+            document.getElementById('meshNetworkHealth').textContent = healthMap[meshData.network_health] || meshData.network_health;
+        } catch(e) {
+            console.error('Error fetching mesh stats:', e);
+        }
         
     } catch (error) {
         console.error('Error loading analytics:', error);

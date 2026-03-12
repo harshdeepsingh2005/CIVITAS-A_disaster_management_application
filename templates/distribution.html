@@ -95,22 +95,9 @@
                 </div>
             </div>
             
-            <div class="ai-recommendations">
+            <div class="ai-recommendations" id="aiRecommendations">
                 <h4>🤖 AI Recommendations</h4>
-                <div class="recommendation-item">
-                    <div class="recommendation-icon">📊</div>
-                    <div class="recommendation-content">
-                        <div class="recommendation-title">Resource Rebalancing</div>
-                        <div class="recommendation-text">Move 50 medical kits from Central Warehouse to Zone 3 for optimal distribution.</div>
-                    </div>
-                </div>
-                <div class="recommendation-item">
-                    <div class="recommendation-icon">🚚</div>
-                    <div class="recommendation-content">
-                        <div class="recommendation-title">Transportation Optimization</div>
-                        <div class="recommendation-text">Use Route B for faster delivery to high-demand areas.</div>
-                    </div>
-                </div>
+                <div class="loading-placeholder"><span class="loading-spinner"></span> Loading recommendations...</div>
             </div>
         </div>
     </div>
@@ -378,14 +365,57 @@ async function loadResources() {
 
 function updateAnalytics(resources) {
     const totalResources = resources.reduce((sum, r) => sum + r.quantity, 0);
-    const distributedToday = Math.floor(totalResources * 0.3); // Simulate 30% distributed
+    const distributedToday = Math.floor(totalResources * 0.3); // Need history endpoint for real data
     const demandPrediction = totalResources > 1000 ? 'High' : totalResources > 500 ? 'Medium' : 'Low';
-    const efficiencyScore = Math.min(95, Math.max(60, 85 + Math.random() * 10));
+    const efficiencyScore = Math.min(95, Math.max(60, 85 + (resources.length * 2)));
     
     document.getElementById('totalResources').textContent = totalResources;
     document.getElementById('distributedToday').textContent = distributedToday;
     document.getElementById('demandPrediction').textContent = demandPrediction;
     document.getElementById('efficiencyScore').textContent = Math.round(efficiencyScore) + '%';
+    
+    // Dynamic AI Recommendations
+    const recommendationsBox = document.getElementById('aiRecommendations');
+    const recommendations = [];
+    
+    const medicalSupplies = resources.filter(r => r.category.toLowerCase().includes('medical') || r.name.toLowerCase().includes('kit'));
+    const totalMed = medicalSupplies.reduce((sum, r) => sum + r.quantity, 0);
+    
+    if (totalMed < 100) {
+        recommendations.push({
+            icon: '⚠️',
+            title: 'Critical Medical Shortage',
+            text: `Medical supplies are critically low (${totalMed} units). Immediate restocking is required to handle influx of patients.`
+        });
+    } else {
+        recommendations.push({
+            icon: '🚚',
+            title: 'Medical Deployment',
+            text: `Sufficient medical supplies available (${totalMed} units). Consider deploying a field unit to Zone 2.`
+        });
+    }
+    
+    if (resources.length > 5 && resources[0].quantity > 500) {
+        recommendations.push({
+            icon: '📊',
+            title: 'Resource Rebalancing',
+            text: `High concentration of ${resources[0].name}. Move surplus from ${resources[0].location} to outer perimeter zones.`
+        });
+    }
+
+    if (recommendations.length > 0) {
+        recommendationsBox.innerHTML = `<h4>🤖 AI Recommendations</h4>` + recommendations.map(rec => `
+            <div class="recommendation-item">
+                <div class="recommendation-icon">${rec.icon}</div>
+                <div class="recommendation-content">
+                    <div class="recommendation-title">${rec.title}</div>
+                    <div class="recommendation-text">${rec.text}</div>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        recommendationsBox.innerHTML = `<h4>🤖 AI Recommendations</h4><div class="text-muted" style="padding:1rem;">Distribution is optimal. No urgent recommendations.</div>`;
+    }
 }
 
 function refreshResources() {

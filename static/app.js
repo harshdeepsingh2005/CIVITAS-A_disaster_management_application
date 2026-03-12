@@ -619,6 +619,87 @@ class CivitasApp {
             const el = document.querySelector(`[data-stat="${k}"]`);
             if (el) el.textContent = v;
         });
+
+        // Populate Rescuer Dashboard specific sections if they exist
+        const missionsContainer = document.getElementById('dashActiveMissions');
+        if (missionsContainer) {
+            const activeMissions = missions.filter(m => m.status === 'active').slice(0, 3);
+            if (activeMissions.length === 0) {
+                missionsContainer.innerHTML = `<div class="text-muted" style="padding:1rem;">No active missions.</div>`;
+            } else {
+                missionsContainer.innerHTML = activeMissions.map(m => `
+                    <div class="mission-item">
+                        <div class="mission-title">${m.title}</div>
+                        <div class="mission-location">${m.location}</div>
+                        <div class="mission-priority status-${m.priority}">${m.priority}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        const resourcesContainer = document.getElementById('dashAvailableResources');
+        if (resourcesContainer) {
+            const availResources = resources.slice(0, 4);
+            if (availResources.length === 0) {
+                resourcesContainer.innerHTML = `<div class="text-muted" style="padding:1rem;">No resources available.</div>`;
+            } else {
+                resourcesContainer.innerHTML = availResources.map(r => `
+                    <div class="resource-item">
+                        <div class="resource-name">${r.name}</div>
+                        <div class="resource-quantity">${r.quantity} units</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Populate Government Dashboard specific sections if they exist
+        const overviewContainer = document.getElementById('dashSystemOverview');
+        if (overviewContainer) {
+            overviewContainer.innerHTML = `
+                <div class="overview-item">
+                    <div class="overview-label">Total Reports Filed</div>
+                    <div class="overview-value">${reports.length}</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">Active Users (Est)</div>
+                    <div class="overview-value">${Math.max(1, Math.floor(reports.length * 1.5 + missions.length * 2))}</div>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-label">System Status</div>
+                    <div class="overview-value status-verified">Operational</div>
+                </div>
+            `;
+        }
+
+        const aiInsightsContainer = document.getElementById('dashAIInsights');
+        if (aiInsightsContainer) {
+            const insights = [];
+            // Generate some dynamic insights based on actual database numbers
+            if (stats.activeAlerts > 2) {
+                insights.push({ title: 'Critical Anomalies Detected', content: `High volume of critical alerts (${stats.activeAlerts}) detected. Suggest immediate mobilization.`});
+            }
+            if (stats.totalResources < 100) {
+                insights.push({ title: 'Resource Shortage Warning', content: `Global resource levels are alarmingly low (${stats.totalResources} units). Restock recommended.`});
+            }
+            if (safehouses.length > 0) {
+                const totalCap = safehouses.reduce((sum, s) => sum + s.capacity, 0);
+                const currentOcc = safehouses.reduce((sum, s) => sum + s.current_occupancy, 0);
+                if (currentOcc / totalCap > 0.8) {
+                    insights.push({ title: 'Shelter Capacity Alert', content: `Safehouses are over 80% capacity. Prepare secondary overflow shelters.`});
+                }
+            }
+            
+            if (insights.length === 0) {
+                aiInsightsContainer.innerHTML = `<div class="text-muted" style="padding:1rem;">Network parameters are stable. No critical AI insights at this time.</div>`;
+            } else {
+                aiInsightsContainer.innerHTML = insights.map(i => `
+                    <div class="insight-item">
+                        <div class="insight-title">${i.title}</div>
+                        <div class="insight-content">${i.content}</div>
+                    </div>
+                `).join('');
+            }
+        }
     }
 
     updateRecentActivity(reports, alerts, missions) {
