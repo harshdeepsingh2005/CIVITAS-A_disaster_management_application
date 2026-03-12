@@ -58,7 +58,7 @@
             <h3 class="card-title">📊 Available Resources</h3>
             <div class="card-actions">
                 <button class="btn btn-secondary" onclick="refreshResources()">🔄 Refresh</button>
-                <button class="btn btn-warning" onclick="syncResourcesViaBLE()">📡 BLE Sync</button>
+                <button class="btn btn-warning" onclick="syncResourcesToMesh()">📡 Sync to Mesh</button>
             </div>
         </div>
         <div class="resources-grid" id="resourcesGrid">
@@ -392,23 +392,27 @@ function refreshResources() {
     loadResources();
 }
 
-async function syncResourcesViaBLE() {
+async function syncResourcesToMesh() {
     try {
-        if (window.bleMesh && window.bleMesh.isConnected) {
-            const resources = await fetch('/api/resources').then(r => r.json());
-            
-            await window.bleMesh.broadcast({
+        const resources = await fetch('/api/resources').then(r => r.json());
+        
+        const sendRes = await fetch('/api/mesh/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
                 type: 'resources',
-                data: resources,
-                timestamp: Date.now()
-            });
-            
-            alert('Resources synced via BLE mesh!');
+                text: `📦 Resource inventory synchronized: ${resources.length} resource batches available.`
+            })
+        });
+        
+        const result = await sendRes.json();
+        if (result.status === 'success') {
+            alert(`Resources synced to ${result.delivered_to} active mesh node(s)!`);
         } else {
-            alert('BLE mesh not connected. Please connect first.');
+            alert('Error syncing resources');
         }
     } catch (error) {
-        console.error('Error syncing resources via BLE:', error);
+        console.error('Error syncing via mesh:', error);
         alert('Error syncing resources');
     }
 }

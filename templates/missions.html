@@ -66,7 +66,7 @@
             <h3 class="card-title">📊 Active Missions</h3>
             <div class="card-actions">
                 <button class="btn btn-secondary" onclick="refreshMissions()">🔄 Refresh</button>
-                <button class="btn btn-warning" onclick="syncMissionsViaBLE()">📡 BLE Sync</button>
+                <button class="btn btn-warning" onclick="syncMissionsToMesh()">📡 Sync to Mesh</button>
             </div>
         </div>
         <div class="missions-list" id="missionsList">
@@ -332,23 +332,27 @@ function refreshMissions() {
     loadMissions();
 }
 
-async function syncMissionsViaBLE() {
+async function syncMissionsToMesh() {
     try {
-        if (window.bleMesh && window.bleMesh.isConnected) {
-            const missions = await fetch('/api/missions').then(r => r.json());
-            
-            await window.bleMesh.broadcast({
+        const missions = await fetch('/api/missions').then(r => r.json());
+        
+        const sendRes = await fetch('/api/mesh/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
                 type: 'missions',
-                data: missions,
-                timestamp: Date.now()
-            });
-            
-            alert('Missions synced via BLE mesh!');
+                text: `🎯 Mission updates synchronized: ${missions.length} active missions.`
+            })
+        });
+        
+        const result = await sendRes.json();
+        if (result.status === 'success') {
+            alert(`Missions synced to ${result.delivered_to} active mesh node(s)!`);
         } else {
-            alert('BLE mesh not connected. Please connect first.');
+            alert('Error syncing missions');
         }
     } catch (error) {
-        console.error('Error syncing missions via BLE:', error);
+        console.error('Error syncing via mesh:', error);
         alert('Error syncing missions');
     }
 }

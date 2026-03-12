@@ -56,7 +56,7 @@
             <h3 class="card-title">🏠 Available Safehouses</h3>
             <div class="card-actions">
                 <button class="btn btn-secondary" onclick="refreshSafehouses()">🔄 Refresh</button>
-                <button class="btn btn-warning" onclick="syncSafehousesViaBLE()">📡 BLE Sync</button>
+                <button class="btn btn-warning" onclick="syncSafehousesToMesh()">📡 Sync to Mesh</button>
             </div>
         </div>
         <div class="safehouses-grid" id="safehousesGrid">
@@ -498,23 +498,27 @@ function refreshSafehouses() {
     loadSafehouses();
 }
 
-async function syncSafehousesViaBLE() {
+async function syncSafehousesToMesh() {
     try {
-        if (window.bleMesh && window.bleMesh.isConnected) {
-            const safehouses = await fetch('/api/safehouses').then(r => r.json());
-            
-            await window.bleMesh.broadcast({
+        const safehouses = await fetch('/api/safehouses').then(r => r.json());
+        
+        const sendRes = await fetch('/api/mesh/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
                 type: 'safehouses',
-                data: safehouses,
-                timestamp: Date.now()
-            });
-            
-            alert('Safehouses synced via BLE mesh!');
+                text: `🏠 Safehouse data updated: ${safehouses.length} active safehouses available.`
+            })
+        });
+        
+        const result = await sendRes.json();
+        if (result.status === 'success') {
+            alert(`Safehouses synced to ${result.delivered_to} active mesh node(s)!`);
         } else {
-            alert('BLE mesh not connected. Please connect first.');
+            alert('Error syncing safehouses');
         }
     } catch (error) {
-        console.error('Error syncing safehouses via BLE:', error);
+        console.error('Error syncing via mesh:', error);
         alert('Error syncing safehouses');
     }
 }

@@ -238,25 +238,22 @@
         <div class="ble-mesh-status">
             <div class="mesh-info">
                 <div class="mesh-item">
-                    <div class="mesh-label">Connected Devices</div>
-                    <div class="mesh-value">12</div>
+                    <div class="mesh-label">Connected Peers</div>
+                    <div class="mesh-value" id="dashMeshCount">—</div>
                 </div>
                 <div class="mesh-item">
-                    <div class="mesh-label">Data Sync Status</div>
-                    <div class="mesh-value status-verified">Active</div>
+                    <div class="mesh-label">Network Health</div>
+                    <div class="mesh-value status-verified" id="dashMeshHealth">—</div>
                 </div>
                 <div class="mesh-item">
-                    <div class="mesh-label">Last Sync</div>
-                    <div class="mesh-value">2 minutes ago</div>
+                    <div class="mesh-label">Mode</div>
+                    <div class="mesh-value" style="color:#00ffff">Server Relay</div>
                 </div>
             </div>
             <div class="mesh-actions">
-                <button class="btn btn-primary" onclick="window.bleMesh.connect()">
-                    🔗 Connect to Mesh
-                </button>
-                <button class="btn btn-secondary" onclick="window.bleMesh.disconnect()">
-                    🔌 Disconnect
-                </button>
+                <a href="{{ url_for('ble_mesh') }}" class="btn btn-primary">
+                    💬 Open Mesh Messenger
+                </a>
             </div>
         </div>
     </div>
@@ -421,12 +418,18 @@ document.addEventListener('DOMContentLoaded', function() {
         window.civitasApp.loadDashboardData();
     }
     
-    // Update BLE status periodically
-    setInterval(() => {
-        if (window.civitasApp) {
-            window.civitasApp.updateBLEStatus();
-        }
-    }, 5000);
+    // Fetch real mesh stats
+    async function getMeshStats() {
+        try {
+            const res = await fetch('/api/ble/status');
+            const data = await res.json();
+            document.getElementById('dashMeshCount').textContent = data.mesh_nodes || 0;
+            const healthMap = { 'good': '🟢 Good', 'no-peers': '🟡 Solo', 'error': '🔴 Error' };
+            document.getElementById('dashMeshHealth').textContent = healthMap[data.network_health] || data.network_health;
+        } catch(e) {}
+    }
+    getMeshStats();
+    setInterval(getMeshStats, 10000);
 });
 </script>
 {% endblock %}

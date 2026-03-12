@@ -62,7 +62,7 @@
             <h3 class="card-title">📊 Active Alerts</h3>
             <div class="card-actions">
                 <button class="btn btn-secondary" onclick="refreshAlerts()">🔄 Refresh</button>
-                <button class="btn btn-warning" onclick="broadcastViaBLE()">📡 BLE Broadcast</button>
+                <button class="btn btn-warning" onclick="broadcastToMesh()">📡 Broadcast to Mesh</button>
             </div>
         </div>
         <div class="alerts-list" id="alertsList">
@@ -298,28 +298,32 @@ function refreshAlerts() {
     loadAlerts();
 }
 
-async function broadcastViaBLE() {
+async function broadcastToMesh() {
     try {
-        if (window.bleMesh && window.bleMesh.isConnected) {
-            const alerts = await fetch('/api/alerts').then(r => r.json());
-            const latestAlert = alerts[0];
-            
-            if (latestAlert) {
-                await window.bleMesh.broadcast({
+        const alerts = await fetch('/api/alerts').then(r => r.json());
+        const latestAlert = alerts[0];
+        
+        if (latestAlert) {
+            const sendRes = await fetch('/api/mesh/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     type: 'alert',
-                    data: latestAlert,
-                    timestamp: Date.now()
-                });
-                
-                alert('Alert broadcasted via BLE mesh!');
+                    text: `🚨 EMERGENCY ALERT: ${latestAlert.title}\n\n${latestAlert.message}`
+                })
+            });
+            
+            const result = await sendRes.json();
+            if (result.status === 'success') {
+                alert(`Alert broadcasted to ${result.delivered_to} active mesh node(s)!`);
             } else {
-                alert('No alerts to broadcast');
+                alert('Error broadcasting alert');
             }
         } else {
-            alert('BLE mesh not connected. Please connect first.');
+            alert('No alerts to broadcast');
         }
     } catch (error) {
-        console.error('Error broadcasting via BLE:', error);
+        console.error('Error broadcasting via mesh:', error);
         alert('Error broadcasting alert');
     }
 }
