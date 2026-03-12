@@ -703,6 +703,8 @@ def ble_discover():
 @app.route('/health')
 def health():
     """Health check endpoint for Railway (no auth required)"""
+    import sys
+    print("[civitas] /health endpoint called", file=sys.stderr)
     return jsonify({'status': 'healthy'}), 200
 
 if __name__ == '__main__':
