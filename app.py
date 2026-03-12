@@ -10,17 +10,26 @@ import json
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///civitas.db')
+
+    # Railway Postgres uses postgres:// but SQLAlchemy 1.4+ requires postgresql://
+    database_url = os.environ.get('DATABASE_URL', 'sqlite:///civitas.db')
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
+
     # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
-    
+
     # Create tables
     with app.app_context():
-        db.create_all()
-    
+        try:
+            db.create_all()
+            print(f"[civitas] Database ready — {database_url.split('@')[-1] if '@' in database_url else database_url}")
+        except Exception as e:
+            print(f"[civitas] WARNING: Could not create tables: {e}")
+
     return app
 
 app = create_app()

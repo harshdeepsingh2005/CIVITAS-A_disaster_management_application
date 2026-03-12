@@ -3,6 +3,9 @@
 dockerfilePath = "Dockerfile"
 
 [deploy]
+# Tell Railway which port the container listens on
+NUM_REPLICAS = 1
+
 # Health check endpoint (Railway pings this to confirm the service is live)
 healthcheckPath = "/health"
 healthcheckTimeout = 300       # seconds to wait for first healthy response

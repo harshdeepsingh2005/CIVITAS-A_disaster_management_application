@@ -28,5 +28,6 @@ EXPOSE ${PORT}
 # Default to production flask env; override with Railway env or docker -e
 ENV FLASK_ENV=production
 
+# 2 workers to stay within Railway free-tier memory (~512 MB)
 # Shell form so $PORT is expanded at runtime
-CMD gunicorn -w 4 -b 0.0.0.0:${PORT} app:app
+CMD gunicorn --workers 2 --timeout 120 --bind 0.0.0.0:${PORT} app:app
