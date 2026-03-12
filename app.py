@@ -706,45 +706,99 @@ def ai_generate_prompt():
             'fallback_prompt': f"Based on {context}, prioritize operations by assessing risks and coordinating resources."
         })
 
+# ── Server-Relay Mesh (works without real BLE hardware) ──────────────────────
+# We store active "mesh nodes" as User records with a last_seen timestamp.
+# Any two users who have pinged /api/mesh/heartbeat within the last 2 minutes
+# are visible to each other as "discovered" peers.
+# Messages are relayed server-side via a simple in-memory queue (dict).
+import time, uuid
+_mesh_messages = {}   # {recipient_user_id: [messages]}
+_mesh_sessions = {}   # {user_id: {'name', 'role', 'device_id', 'seen_at'}}
+
+@app.route('/api/mesh/heartbeat', methods=['POST'])
+@login_required
+def mesh_heartbeat():
+    """Register / refresh this device in the server mesh."""
+    data = request.get_json() or {}
+    _mesh_sessions[current_user.id] = {
+        'user_id':   current_user.id,
+        'name':      current_user.name,
+        'role':      current_user.role,
+        'device_id': data.get('device_id', f'web-{current_user.id}'),
+        'seen_at':   time.time(),
+    }
+    return jsonify({'status': 'ok', 'your_id': current_user.id})
+
+@app.route('/api/mesh/send', methods=['POST'])
+@login_required
+def mesh_send():
+    """Send a message to one or all mesh peers via server relay."""
+    data = request.get_json() or {}
+    msg = {
+        'id':        str(uuid.uuid4())[:8],
+        'from_id':   current_user.id,
+        'from_name': current_user.name,
+        'from_role': current_user.role,
+        'type':      data.get('type', 'message'),
+        'text':      data.get('text', data.get('message', '')),
+        'timestamp': datetime.utcnow().isoformat(),
+    }
+    recipient_id = data.get('to')  # None = broadcast to all
+    sent_to = []
+    now = time.time()
+    for uid, session in _mesh_sessions.items():
+        if uid == current_user.id: continue
+        if now - session['seen_at'] > 120: continue  # only active peers
+        if recipient_id and uid != int(recipient_id): continue
+        _mesh_messages.setdefault(uid, []).append(msg)
+        sent_to.append(uid)
+    return jsonify({'status': 'success', 'delivered_to': len(sent_to), 'msg_id': msg['id']})
+
+@app.route('/api/mesh/inbox', methods=['GET'])
+@login_required
+def mesh_inbox():
+    """Fetch messages sent to this device from other mesh peers."""
+    msgs = _mesh_messages.pop(current_user.id, [])
+    return jsonify({'messages': msgs, 'count': len(msgs)})
+
 # BLE Mesh Management Endpoints
 @app.route('/api/ble/status', methods=['GET'])
 @login_required
 def ble_status():
-    """Get BLE mesh network status"""
+    """Get BLE mesh network status (active users in server-relay mesh)."""
+    now = time.time()
+    active = [
+        {'id': s['device_id'], 'name': s['name'], 'role': s['role'],
+         'signal': -45, 'distance': 'relay', 'online': True}
+        for uid, s in _mesh_sessions.items()
+        if now - s['seen_at'] < 120 and uid != current_user.id
+    ]
     return jsonify({
-        'ble_available': True,  # This would check actual BLE availability
-        'mesh_nodes': 3,  # This would be dynamic
-        'connected_devices': [
-            {'id': 'civitas-rescuer-001', 'role': 'rescuer', 'signal': -45, 'distance': '5m'},
-            {'id': 'civitas-government-002', 'role': 'government', 'signal': -67, 'distance': '12m'},
-            {'id': 'civitas-citizen-003', 'role': 'citizen', 'signal': -52, 'distance': '8m'}
-        ],
-        'network_health': 'good',
-        'last_sync': '2025-10-05T01:40:00Z'
+        'ble_available':   True,
+        'relay_mode':      True,
+        'mesh_nodes':      len(active),
+        'connected_devices': active,
+        'network_health':  'good' if active else 'no-peers',
+        'last_sync':       datetime.utcnow().isoformat()
     })
 
 @app.route('/api/ble/discover', methods=['POST'])
 @login_required
 def ble_discover():
-    """Discover nearby BLE devices"""
-    try:
-        # This would trigger actual BLE device discovery
-        discovered_devices = [
-            {'name': 'Civitas-Rescuer-001', 'distance': '5m', 'signal': -45, 'role': 'rescuer'},
-            {'name': 'Civitas-Government-002', 'distance': '12m', 'signal': -67, 'role': 'government'},
-            {'name': 'Civitas-Citizen-003', 'distance': '8m', 'signal': -52, 'role': 'citizen'}
-        ]
-        
-        return jsonify({
-            'success': True,
-            'devices_found': len(discovered_devices),
-            'devices': discovered_devices
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
+    """Return active mesh peers (users online in the last 2 min)."""
+    now = time.time()
+    active = [
+        {'name':     s['name'],
+         'role':     s['role'],
+         'device_id':s['device_id'],
+         'user_id':  uid,
+         'signal':   -50,
+         'distance': 'relay',
+         'connected':False}
+        for uid, s in _mesh_sessions.items()
+        if now - s['seen_at'] < 120 and uid != current_user.id
+    ]
+    return jsonify({'success': True, 'devices_found': len(active), 'devices': active})
 
 @app.route('/health')
 def health():

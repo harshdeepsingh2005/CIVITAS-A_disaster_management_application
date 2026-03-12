@@ -3,341 +3,568 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLE Mesh Connection - Civitas</title>
+    <title>BLE Mesh Network - Civitas</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- Load main app.js so window.civitasApp (and connectBLE) is available -->
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .mesh-container {
-            max-width: 800px;
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0e1a;
+            color: #e0e6f0;
+            min-height: 100vh;
+        }
+
+        /* ── Header ─────────────────────────────────────────────────────────── */
+        .top-bar {
+            background: rgba(10, 14, 26, 0.95);
+            border-bottom: 1px solid rgba(0, 200, 255, 0.2);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky; top: 0; z-index: 100;
+        }
+        .top-bar-brand { font-size: 1.1rem; font-weight: 700; color: #00c8ff; }
+        .top-bar-nav a {
+            color: #94a3b8; text-decoration: none; margin-left: 20px;
+            font-size: 0.85rem; transition: color 0.2s;
+        }
+        .top-bar-nav a:hover { color: #00c8ff; }
+
+        /* ── Layout ─────────────────────────────────────────────────────────── */
+        .page-wrap {
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 20px;
-        }
-        .connection-panel {
-            background: rgba(0, 255, 255, 0.1);
-            border: 1px solid #00ffff;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .device-list {
+            padding: 28px 20px;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
         }
+        @media (max-width: 768px) { .page-wrap { grid-template-columns: 1fr; } }
+
+        /* ── Panel card ─────────────────────────────────────────────────────── */
+        .panel {
+            background: rgba(16, 22, 40, 0.85);
+            border: 1px solid rgba(0, 200, 255, 0.12);
+            border-radius: 14px;
+            padding: 22px;
+            backdrop-filter: blur(10px);
+        }
+        .panel h2 { font-size: 1rem; font-weight: 600; color: #00c8ff; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .panel h3 { font-size: 0.9rem; font-weight: 600; color: #94a3b8; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+        /* ── Status pill ─────────────────────────────────────────────────────── */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 7px;
+            background: rgba(0,0,0,0.3); border-radius: 20px;
+            padding: 6px 14px; font-size: 0.8rem; font-weight: 500;
+            border: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 18px;
+        }
+        .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #64748b;
+            transition: background 0.4s;
+        }
+        .dot.online  { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+        .dot.offline { background: #ef4444; }
+        .dot.scanning { background: #f59e0b; animation: blink 0.8s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── Action buttons ─────────────────────────────────────────────────── */
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 18px; border-radius: 8px; border: none;
+            font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; line-height: 1;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+        }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-danger  { background: #dc2626; color: #fff; }
+        .btn-secondary {
+            background: rgba(255,255,255,0.07);
+            color: #94a3b8; border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.12); color: #e2e8f0; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: none; }
+        .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+        /* ── Device cards ───────────────────────────────────────────────────── */
+        .device-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
         .device-card {
-            background: rgba(0, 255, 0, 0.1);
-            border: 1px solid #00ff00;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex; align-items: center; justify-content: space-between;
+            transition: border-color 0.2s;
         }
-        .device-card.connected {
-            background: rgba(0, 255, 0, 0.2);
-            border-color: #00ff00;
+        .device-card:hover { border-color: rgba(0,200,255,0.3); }
+        .device-card.connected { border-color: rgba(34,197,94,0.4); }
+        .device-info { display: flex; align-items: center; gap: 12px; }
+        .device-avatar {
+            width: 38px; height: 38px; border-radius: 50%;
+            background: linear-gradient(135deg, #0ea5e9, #7c3aed);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem; flex-shrink: 0;
         }
-        .device-card.disconnected {
-            background: rgba(255, 0, 0, 0.1);
-            border-color: #ff0000;
+        .device-name { font-size: 0.9rem; font-weight: 600; color: #e2e8f0; }
+        .device-role { font-size: 0.75rem; color: #64748b; margin-top: 2px; text-transform: capitalize; }
+        .device-badge {
+            font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
+            font-weight: 600; background: rgba(34,197,94,0.15); color: #22c55e;
+            border: 1px solid rgba(34,197,94,0.3);
         }
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
+        .device-badge.relay { background: rgba(14,165,233,0.15); color: #38bdf8; border-color: rgba(14,165,233,0.3); }
+
+        /* ── No peers state ─────────────────────────────────────────────────── */
+        .empty-state {
+            text-align: center; padding: 32px 16px; color: #475569;
         }
-        .status-connected    { background: #00ff00; }
-        .status-disconnected { background: #ff0000; }
-        .status-scanning     { background: #ffff00; animation: pulse 1s infinite; }
-        .status-error        { background: #ff6600; }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50%       { opacity: 0.5; }
+        .empty-state .icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .empty-state p { font-size: 0.85rem; line-height: 1.6; }
+
+        /* ── Stats grid ─────────────────────────────────────────────────────── */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+        .stat-box {
+            background: rgba(0,0,0,0.3); border-radius: 10px; padding: 14px;
+            border: 1px solid rgba(255,255,255,0.05);
         }
-        .connection-button {
-            background: linear-gradient(45deg, #00ffff, #0080ff);
-            border: none;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 10px;
-            transition: all 0.3s ease;
+        .stat-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 1.4rem; font-weight: 700; color: #e2e8f0; margin-top: 4px; }
+        .stat-value.green { color: #22c55e; }
+        .stat-value.blue  { color: #38bdf8; }
+
+        /* ── Chat / message log ─────────────────────────────────────────────── */
+        .msg-log {
+            height: 280px; overflow-y: auto;
+            background: rgba(0,0,0,0.3); border-radius: 10px;
+            padding: 12px; display: flex; flex-direction: column; gap: 8px;
+            border: 1px solid rgba(255,255,255,0.06);
         }
-        .connection-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 255, 255, 0.4);
+        .msg-log::-webkit-scrollbar { width: 4px; }
+        .msg-log::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        .msg-bubble {
+            padding: 9px 13px; border-radius: 10px; max-width: 85%;
+            font-size: 0.82rem; line-height: 1.5;
         }
-        .connection-button:disabled {
-            background: #666;
-            cursor: not-allowed;
-            transform: none;
+        .msg-bubble.incoming {
+            background: rgba(14,165,233,0.12); border: 1px solid rgba(14,165,233,0.2);
+            align-self: flex-start; color: #bae6fd;
         }
+        .msg-bubble.outgoing {
+            background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.2);
+            align-self: flex-end; color: #bbf7d0;
+        }
+        .msg-bubble.system {
+            background: rgba(100,116,139,0.12); border: 1px solid rgba(100,116,139,0.2);
+            align-self: center; color: #94a3b8; font-size: 0.75rem; font-style: italic;
+        }
+        .msg-meta { font-size: 0.68rem; opacity: 0.6; margin-top: 3px; }
+
+        /* ── Compose ─────────────────────────────────────────────────────────── */
+        .compose-row {
+            display: flex; gap: 8px; margin-top: 12px;
+        }
+        .compose-row textarea {
+            flex: 1; padding: 10px 12px; border-radius: 8px;
+            background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
+            color: #e2e8f0; font-size: 0.85rem; resize: none; height: 44px;
+            font-family: inherit; outline: none; transition: border-color 0.2s;
+        }
+        .compose-row textarea:focus { border-color: rgba(0,200,255,0.4); }
+        .compose-row textarea::placeholder { color: #475569; }
+
+        /* ── Notice banner ───────────────────────────────────────────────────── */
+        .notice {
+            background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.25);
+            border-radius: 8px; padding: 10px 14px; font-size: 0.8rem; color: #fbbf24;
+            margin-bottom: 14px; display: flex; gap: 8px; align-items: flex-start;
+        }
+
+        /* ── Toast ───────────────────────────────────────────────────────────── */
+        #toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: #1e293b; border: 1px solid rgba(0,200,255,0.3);
+            color: #e2e8f0; padding: 12px 18px; border-radius: 10px;
+            font-size: 0.85rem; opacity: 0; pointer-events: none;
+            transform: translateY(8px); transition: all 0.3s;
+            max-width: 300px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        #toast.show { opacity: 1; transform: translateY(0); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🛡️ Civitas BLE Mesh Network</h1>
-            <nav>
-                <a href="{{ url_for('dashboard') }}">Dashboard</a>
-                <a href="{{ url_for('alerts') }}">Alerts</a>
-                <a href="{{ url_for('missions') }}">Missions</a>
-                <a href="{{ url_for('reports') }}">Reports</a>
-                <a href="{{ url_for('logout') }}">Logout</a>
-            </nav>
-        </header>
 
-        <div class="mesh-container">
-            <div class="connection-panel">
-                <h2>📡 BLE Mesh Connection</h2>
-                <div class="ble-status">
-                    <span class="status-indicator" id="bleStatus"></span>
-                    <span id="bleStatusText">Checking BLE availability...</span>
-                </div>
-                
-                <div style="margin: 20px 0;">
-                    <!-- FIX: call civitasApp.connectBLE() which requires a user gesture
-                              (the old connectToMesh() called requestDevice() inside a
-                               load handler which caused SecurityError in all browsers) -->
-                    <button class="connection-button" id="connectBtn"
-                            onclick="window.civitasApp && civitasApp.connectBLE()">
-                        Connect to Mesh
-                    </button>
-                    <button class="connection-button" id="discoverBtn"
-                            onclick="discoverDevices()" disabled>
-                        Discover Devices
-                    </button>
-                    <button class="connection-button" id="broadcastBtn"
-                            onclick="testBroadcast()" disabled>
-                        Test Broadcast
-                    </button>
-                </div>
+<div class="top-bar">
+    <span class="top-bar-brand">🛡️ Civitas Mesh</span>
+    <nav class="top-bar-nav">
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('alerts') }}">Alerts</a>
+        <a href="{{ url_for('missions') }}">Missions</a>
+        <a href="{{ url_for('reports') }}">Reports</a>
+        <a href="{{ url_for('logout') }}">Logout</a>
+    </nav>
+</div>
+
+<div class="page-wrap">
+
+    <!-- ── LEFT COLUMN: Connection + Peers ─────────────────────────────── -->
+    <div>
+        <!-- Status + Connect -->
+        <div class="panel" style="margin-bottom:16px">
+            <h2>📡 Mesh Connection</h2>
+
+            <div class="status-pill">
+                <span class="dot" id="statusDot"></span>
+                <span id="statusText">Connecting to server relay…</span>
             </div>
 
-            <div class="connection-panel">
-                <h3>🔍 Discovered Devices</h3>
-                <div class="device-list" id="deviceList">
-                    <div class="device-card disconnected">
-                        <h4>No devices found</h4>
-                        <p>Click "Discover Devices" to scan for nearby Civitas devices</p>
-                    </div>
-                </div>
+            <div class="notice">
+                ℹ️ This app uses a <strong>server-relay mesh</strong>. Open this page on another device (phone/laptop) while logged in — it will appear here instantly, no Bluetooth hardware needed.
             </div>
 
-            <div class="connection-panel">
-                <h3>📊 Network Statistics</h3>
-                <div id="networkStats">
-                    <p><strong>Connected Devices:</strong> <span id="connectedCount">0</span></p>
-                    <p><strong>Network Health:</strong> <span id="networkHealth">Unknown</span></p>
-                    <p><strong>Last Update:</strong> <span id="lastUpdate">Never</span></p>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="connectBtn" onclick="joinMesh()">Join Mesh</button>
+                <button class="btn btn-secondary" id="refreshBtn" onclick="refreshPeers()">🔄 Refresh</button>
+            </div>
+        </div>
+
+        <!-- Network stats -->
+        <div class="panel" style="margin-bottom:16px">
+            <h3>Network Stats</h3>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Online Peers</div>
+                    <div class="stat-value blue" id="peerCount">—</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Health</div>
+                    <div class="stat-value green" id="meshHealth">—</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">My Role</div>
+                    <div class="stat-value" style="font-size:1rem;text-transform:capitalize" id="myRole">{{ current_user.role }}</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Last Sync</div>
+                    <div class="stat-value" style="font-size:0.85rem" id="lastSync">—</div>
                 </div>
             </div>
+        </div>
 
-            <div class="connection-panel">
-                <h3>📤 Test Message</h3>
-                <textarea id="testMessage" placeholder="Enter a test message to broadcast..." 
-                         style="width: 100%; height: 100px; padding: 10px; border-radius: 5px; border: 1px solid #00ffff; background: rgba(0,0,0,0.3); color: white; resize: vertical;"></textarea>
-                <br><br>
-                <button class="connection-button" onclick="sendTestMessage()" disabled id="sendBtn">
-                    Send Test Message
-                </button>
+        <!-- Discovered peers -->
+        <div class="panel">
+            <h2>🔍 Online Peers</h2>
+            <div class="device-list" id="deviceList">
+                <div class="empty-state">
+                    <div class="icon">📡</div>
+                    <p>Joining mesh…<br>Open this page on another device to see it here.</p>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // ── BLE page-level helpers (work alongside window.civitasApp) ──────────
+    <!-- ── RIGHT COLUMN: Messaging ─────────────────────────────────────── -->
+    <div>
+        <div class="panel">
+            <h2>💬 Mesh Messenger</h2>
 
-        // Mirror connection state changes from civitasApp into the page UI
-        function syncConnectUI(connected, deviceName) {
-            const btn  = document.getElementById('connectBtn');
-            const text = document.getElementById('bleStatusText');
-            const ind  = document.getElementById('bleStatus');
+            <!-- Message log -->
+            <div class="msg-log" id="msgLog">
+                <div class="msg-bubble system">You are now in the mesh network. Messages sent here are relayed to all online peers in real time.</div>
+            </div>
 
-            if (connected) {
-                btn.textContent  = 'Disconnect';
-                btn.onclick      = disconnectFromMesh;
-                text.textContent = `Connected to ${deviceName || 'device'}`;
-                ind.className    = 'status-indicator status-connected';
-                document.getElementById('discoverBtn').disabled  = false;
-                document.getElementById('broadcastBtn').disabled = false;
-                document.getElementById('sendBtn').disabled      = false;
-            } else {
-                btn.textContent  = 'Connect to Mesh';
-                btn.onclick      = () => civitasApp.connectBLE();
-                text.textContent = 'Disconnected';
-                ind.className    = 'status-indicator status-disconnected';
-                document.getElementById('discoverBtn').disabled  = true;
-                document.getElementById('broadcastBtn').disabled = true;
-                document.getElementById('sendBtn').disabled      = true;
-            }
-        }
+            <!-- Compose -->
+            <div class="compose-row">
+                <textarea id="msgInput" placeholder="Type a message to broadcast to all peers…" rows="1"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+                <button class="btn btn-primary" id="sendBtn" onclick="sendMessage()">Send</button>
+            </div>
 
-        // Override civitasApp.showBLEStatus so status changes update the page indicator
-        window.addEventListener('load', () => {
-            checkBLEStatus();
+            <!-- Quick-send buttons -->
+            <div class="btn-row" style="margin-top:14px">
+                <button class="btn btn-secondary" onclick="sendQuick('🚨 EVACUATE NOW — all units move immediately')">🚨 Evacuate</button>
+                <button class="btn btn-secondary" onclick="sendQuick('📍 Requesting backup at my location')">📍 Need backup</button>
+                <button class="btn btn-secondary" onclick="sendQuick('✅ Area secure — situation controlled')">✅ All clear</button>
+                <button class="btn btn-secondary" onclick="sendQuick('🏥 Medical assistance required urgently')">🏥 Medical</button>
+            </div>
+        </div>
 
-            // Patch showBLEStatus to also update page elements
-            if (window.civitasApp) {
-                const orig = civitasApp.showBLEStatus.bind(civitasApp);
-                civitasApp.showBLEStatus = function(state) {
-                    orig(state);
-                    const ind  = document.getElementById('bleStatus');
-                    const text = document.getElementById('bleStatusText');
-                    if (!ind || !text) return;
-                    const map = {
-                        connected:    ['status-connected',    'BLE Connected'],
-                        disconnected: ['status-disconnected', 'BLE Disconnected'],
-                        scanning:     ['status-scanning',     'Scanning for devices…'],
-                        error:        ['status-error',        'BLE Error'],
-                        not_supported:['status-error',        'BLE Not Supported'],
-                        not_available:['status-disconnected', 'BLE Not Available'],
-                    };
-                    const [cls, label] = map[state] || ['status-disconnected', state];
-                    ind.className    = `status-indicator ${cls}`;
-                    text.textContent = label;
+        <!-- Optional real BLE section -->
+        <div class="panel" style="margin-top:16px">
+            <h2>🔵 Real Bluetooth (optional)</h2>
+            <p style="font-size:0.82rem;color:#64748b;margin-bottom:14px;line-height:1.6">
+                If both devices have BLE hardware and Chrome supports it, you can also connect directly over Bluetooth for offline (no-internet) situations. This requires a physical BLE peripheral running the Civitas GATT service.
+            </p>
+            <div class="btn-row">
+                <button class="btn btn-secondary" id="bleHardwareBtn" onclick="tryRealBLE()">🔵 Scan for BLE Devices</button>
+            </div>
+            <p style="font-size:0.75rem;color:#475569;margin-top:10px" id="bleHardwareStatus">Status: not attempted</p>
+        </div>
+    </div>
+</div>
 
-                    // Update button states when connected/disconnected
-                    if (state === 'connected') {
-                        syncConnectUI(true, civitasApp.bleDevice?.name);
-                    } else if (state === 'disconnected' || state === 'error') {
-                        syncConnectUI(false);
-                    }
-                };
-            }
+<div id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const MY_NAME  = {{ current_user.name | tojson }};
+const MY_ROLE  = {{ current_user.role | tojson }};
+const DEVICE_ID = (() => {
+    let id = localStorage.getItem('civitas-device-id');
+    if (!id) { id = 'web-' + Math.random().toString(36).slice(2,9); localStorage.setItem('civitas-device-id', id); }
+    return id;
+})();
+
+let meshConnected = false;
+let heartbeatTimer = null;
+let pollTimer = null;
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+    joinMesh();
+});
+
+// ── Join / leave ───────────────────────────────────────────────────────────────
+async function joinMesh() {
+    setStatus('scanning', 'Joining server relay…');
+    document.getElementById('connectBtn').disabled = true;
+
+    try {
+        const res  = await fetch('/api/mesh/heartbeat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: DEVICE_ID })
         });
+        const data = await res.json();
 
-        async function checkBLEStatus() {
-            try {
-                const res  = await fetch('/api/ble/status');
-                const data = await res.json();
-                document.getElementById('bleStatus').className =
-                    `status-indicator ${data.ble_available ? 'status-connected' : 'status-disconnected'}`;
-                document.getElementById('bleStatusText').textContent =
-                    data.ble_available ? 'BLE Available — ready to connect' : 'BLE Not Available';
-                updateNetworkStats(data);
-            } catch (err) {
-                document.getElementById('bleStatus').className    = 'status-indicator status-error';
-                document.getElementById('bleStatusText').textContent = 'Status check failed';
-            }
+        if (data.status === 'ok') {
+            meshConnected = true;
+            setStatus('online', `Connected as ${MY_NAME} (${MY_ROLE})`);
+            document.getElementById('connectBtn').textContent = '✅ Connected';
+            addSystemMsg('Joined the Civitas server-relay mesh.');
+            startHeartbeat();
+            startPolling();
+            refreshPeers();
         }
+    } catch (err) {
+        setStatus('offline', 'Server unreachable');
+        document.getElementById('connectBtn').disabled = false;
+        toast('Could not reach server. Check your connection.', '#ef4444');
+    }
+}
 
-        function disconnectFromMesh() {
-            if (window.civitasApp && civitasApp.bleDevice) {
-                try { civitasApp.bleDevice.gatt.disconnect(); } catch(_) {}
-            }
-            syncConnectUI(false);
+// ── Heartbeat every 30 s ───────────────────────────────────────────────────────
+function startHeartbeat() {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(async () => {
+        try {
+            await fetch('/api/mesh/heartbeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_id: DEVICE_ID })
+            });
+        } catch (_) {}
+    }, 30_000);
+}
+
+// ── Poll peers + inbox every 5 s ──────────────────────────────────────────────
+function startPolling() {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+        await refreshPeers();
+        await pollInbox();
+    }, 5_000);
+}
+
+async function refreshPeers() {
+    try {
+        // Update network stats
+        const statusRes  = await fetch('/api/ble/status');
+        const statusData = await statusRes.json();
+        document.getElementById('peerCount').textContent = statusData.mesh_nodes ?? 0;
+        document.getElementById('meshHealth').textContent = statusData.network_health === 'good'
+            ? '🟢 Good' : statusData.network_health === 'no-peers' ? '🟡 Solo' : '🔴';
+        document.getElementById('lastSync').textContent = new Date().toLocaleTimeString();
+
+        // Discover peers
+        const discRes  = await fetch('/api/ble/discover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const discData = await discRes.json();
+        renderPeers(discData.devices || []);
+    } catch (_) {}
+}
+
+async function pollInbox() {
+    try {
+        const res  = await fetch('/api/mesh/inbox');
+        const data = await res.json();
+        (data.messages || []).forEach(m => addIncomingMsg(m));
+    } catch (_) {}
+}
+
+// ── Render devices ────────────────────────────────────────────────────────────
+function renderPeers(devices) {
+    const list = document.getElementById('deviceList');
+    if (!devices.length) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">📡</div>
+                <p>No peers online yet.<br>Open this page on another device while logged in.</p>
+            </div>`;
+        return;
+    }
+    const roleIcon = { citizen: '👤', rescuer: '🚑', government: '🏛️' };
+    list.innerHTML = devices.map(d => `
+        <div class="device-card connected">
+            <div class="device-info">
+                <div class="device-avatar">${roleIcon[d.role] || '📱'}</div>
+                <div>
+                    <div class="device-name">${d.name}</div>
+                    <div class="device-role">${d.role}</div>
+                </div>
+            </div>
+            <span class="device-badge relay">relay</span>
+        </div>`).join('');
+}
+
+// ── Messaging ─────────────────────────────────────────────────────────────────
+async function sendMessage() {
+    const input = document.getElementById('msgInput');
+    const text  = input.value.trim();
+    if (!text) return;
+    if (!meshConnected) { toast('Join mesh first', '#f59e0b'); return; }
+
+    input.value = '';
+    addOutgoingMsg(text);
+
+    try {
+        const res  = await fetch('/api/mesh/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'message', text })
+        });
+        const data = await res.json();
+        if (data.delivered_to === 0) {
+            addSystemMsg('No peers online to receive the message.');
+        } else {
+            addSystemMsg(`Delivered to ${data.delivered_to} peer(s).`);
         }
+    } catch (err) {
+        addSystemMsg('Send failed — check connection.');
+    }
+}
 
-        async function discoverDevices() {
-            const btn = document.getElementById('discoverBtn');
-            btn.disabled    = true;
-            btn.textContent = 'Scanning…';
+function sendQuick(txt) {
+    document.getElementById('msgInput').value = txt;
+    sendMessage();
+}
 
-            try {
-                const res  = await fetch('/api/ble/discover', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await res.json();
-                updateDeviceList(data.devices || []);
-            } catch (err) {
-                console.error('[BLE] discovery error:', err);
-            } finally {
-                btn.disabled    = false;
-                btn.textContent = 'Discover Devices';
-            }
+// ── Message log helpers ───────────────────────────────────────────────────────
+function addOutgoingMsg(text) {
+    appendMsg(`
+        <div class="msg-bubble outgoing">
+            <div>${escHtml(text)}</div>
+            <div class="msg-meta">You · ${now()}</div>
+        </div>`);
+}
+function addIncomingMsg(m) {
+    appendMsg(`
+        <div class="msg-bubble incoming">
+            <div>${escHtml(m.text || '')}</div>
+            <div class="msg-meta">${escHtml(m.from_name)} (${escHtml(m.from_role)}) · ${fmtTime(m.timestamp)}</div>
+        </div>`);
+    toast(`📨 ${m.from_name}: ${(m.text||'').slice(0,60)}`);
+}
+function addSystemMsg(text) {
+    appendMsg(`<div class="msg-bubble system">${escHtml(text)}</div>`);
+}
+function appendMsg(html) {
+    const log = document.getElementById('msgLog');
+    const el  = document.createElement('div');
+    el.innerHTML = html;
+    log.appendChild(el.firstElementChild);
+    log.scrollTop = log.scrollHeight;
+}
+
+// ── Optional real BLE ─────────────────────────────────────────────────────────
+async function tryRealBLE() {
+    const statusEl = document.getElementById('bleHardwareStatus');
+    const btn      = document.getElementById('bleHardwareBtn');
+
+    if (!navigator.bluetooth) {
+        statusEl.textContent = 'Status: Web Bluetooth not available in this browser. Use Chrome on Android or desktop.';
+        toast('Web Bluetooth requires Chrome (not Safari/Firefox)', '#f59e0b');
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = 'Status: Scanning… (browser device picker should appear)';
+
+    try {
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [
+                { namePrefix: 'Civitas' },
+                { namePrefix: 'DisasterMesh' },
+                { namePrefix: 'EmergencyNet' },
+            ],
+            optionalServices: ['12345678-1234-1234-1234-123456789abc']
+        });
+        statusEl.textContent = `Status: Found device → ${device.name}. Connecting…`;
+        if (window.civitasApp) {
+            // Hand off to the main app BLE manager
+            window.civitasApp.bleDevice = device;
+            await window.civitasApp._connectGATT();
+            statusEl.textContent = `Status: ✅ BLE connected to ${device.name}`;
+            toast(`BLE connected to ${device.name}`, '#22c55e');
         }
-
-        function updateDeviceList(devices) {
-            const list = document.getElementById('deviceList');
-            if (!devices.length) {
-                list.innerHTML = `
-                    <div class="device-card disconnected">
-                        <h4>No devices found</h4>
-                        <p>Click "Discover Devices" to scan for nearby Civitas devices</p>
-                    </div>`;
-                return;
-            }
-            list.innerHTML = devices.map(d => `
-                <div class="device-card ${d.connected ? 'connected' : 'disconnected'}">
-                    <h4>${d.name}</h4>
-                    <p><strong>Role:</strong>     ${d.role     || '—'}</p>
-                    <p><strong>Distance:</strong> ${d.distance || '—'}</p>
-                    <p><strong>Signal:</strong>   ${d.signal   || '—'} dBm</p>
-                    <span class="status-indicator ${d.connected ? 'status-connected' : 'status-disconnected'}"></span>
-                    ${d.connected ? 'Connected' : 'Available'}
-                </div>`).join('');
+    } catch (err) {
+        if (err.name === 'NotFoundError') {
+            statusEl.textContent = 'Status: No Civitas BLE peripheral found nearby. Make sure the other device is running the native Civitas BLE service.';
+        } else {
+            statusEl.textContent = `Status: ${err.message}`;
         }
+    } finally {
+        btn.disabled = false;
+    }
+}
 
-        // FIX: check data.status === 'success' (backend now returns this correctly)
-        async function testBroadcast() {
-            try {
-                const res  = await fetch('/api/ble/broadcast', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'test', message: 'Hello from Civitas mesh network!' })
-                });
-                const data = await res.json();
-                showNotification(data.status === 'success'
-                    ? '✅ Test broadcast sent!'
-                    : `Broadcast failed: ${data.message || ''}`);
-            } catch (err) {
-                showNotification('Broadcast error: ' + err.message);
-            }
-        }
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(state, text) {
+    const dot  = document.getElementById('statusDot');
+    const span = document.getElementById('statusText');
+    dot.className = `dot ${state}`;
+    span.textContent = text;
+}
 
-        async function sendTestMessage() {
-            const msg = document.getElementById('testMessage').value.trim();
-            if (!msg) { showNotification('Please enter a message'); return; }
+function toast(msg, color = '#38bdf8') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.borderColor = color + '44';
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), 3500);
+}
 
-            try {
-                // Send via BLE if connected, fall back to server broadcast
-                if (window.civitasApp && civitasApp.bleCharacteristic) {
-                    const ok = await civitasApp.broadcastBLEData('user_message', { text: msg });
-                    showNotification(ok ? '✅ Message sent via BLE' : 'BLE send failed');
-                } else {
-                    const res  = await fetch('/api/ble/broadcast', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type: 'user_message', message: msg })
-                    });
-                    const data = await res.json();
-                    showNotification(data.status === 'success' ? '✅ Message queued' : 'Send failed');
-                }
-                document.getElementById('testMessage').value = '';
-            } catch (err) {
-                showNotification('Send error: ' + err.message);
-            }
-        }
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function now() { return new Date().toLocaleTimeString(); }
+function fmtTime(iso) {
+    try { return new Date(iso).toLocaleTimeString(); } catch { return ''; }
+}
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
 
-        function updateNetworkStats(data) {
-            document.getElementById('connectedCount').textContent =
-                data.connected_devices?.length ?? data.mesh_nodes ?? 0;
-            document.getElementById('networkHealth').textContent  = data.network_health || 'Unknown';
-            document.getElementById('lastUpdate').textContent     = new Date().toLocaleTimeString();
-        }
-
-        function showNotification(message) {
-            const el = document.createElement('div');
-            el.style.cssText = `
-                position:fixed; top:20px; right:20px;
-                background:rgba(0,200,80,0.92); color:#fff;
-                padding:12px 18px; border-radius:6px;
-                z-index:1000; max-width:320px;
-                font-family:sans-serif; font-size:14px;
-                box-shadow:0 4px 12px rgba(0,0,0,.3);`;
-            el.textContent = message;
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 3500);
-        }
-
-        // Refresh network stats every 30 s
-        setInterval(checkBLEStatus, 30000);
-    </script>
 </body>
 </html>
