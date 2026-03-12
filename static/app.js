@@ -85,7 +85,7 @@ class CivitasApp {
     async initServiceWorker() {
         if ('serviceWorker' in navigator) {
             try {
-                const reg = await navigator.serviceWorker.register('/static/sw.js');
+                const reg = await navigator.serviceWorker.register('/sw.js');
                 console.log('[SW] registered:', reg.scope);
             } catch (err) {
                 console.error('[SW] registration failed:', err);
@@ -752,7 +752,13 @@ class CivitasApp {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             this.deferredPrompt = e;
+            
+            // Show the floating banner
             document.querySelector('.install-prompt')?.classList.add('show');
+            
+            // Show the navbar install button
+            const navBtn = document.getElementById('navInstallBtn');
+            if (navBtn) navBtn.style.display = 'inline-flex';
         });
     }
 

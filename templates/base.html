@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/icon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/icon-16.png">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
-    <link rel="manifest" href="/static/manifest.json">
+    <link rel="manifest" href="/manifest.json">
     
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -96,6 +96,7 @@
                             <span>BLE Status</span>
                         </div>
                         <span class="user-role {{ current_user.role }}">{{ current_user.role.title() }}</span>
+                        <button id="navInstallBtn" class="btn btn-secondary" onclick="window.civitasApp.installPWA()" style="display: none;">📱 Install App</button>
                         <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
                     {% endif %}
                 </div>

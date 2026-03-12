@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()  # Load .env before anything reads os.environ
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_from_directory, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Report, Alert, Mission, Distribution, Safehouse, Resource, Team
@@ -233,6 +233,17 @@ class ChromeNanoAPI:
         except Exception as e:
             print(f"Chrome Nano Prompt Generator error: {e}")
             return f"Based on {context}, here's the recommended strategy: 1) Assess immediate risks, 2) Prioritize critical needs, 3) Coordinate resources effectively."
+
+# PWA Service Worker Config
+@app.route('/sw.js')
+def service_worker():
+    response = make_response(send_from_directory('static', 'sw.js'))
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json')
 
 # Authentication routes
 @app.route('/')
