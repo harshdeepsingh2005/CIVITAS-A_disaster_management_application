@@ -1,5 +1,11 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utcnow():
+    """Return timezone-aware UTC datetime (replaces deprecated datetime.utcnow())"""
+    return datetime.now(timezone.utc)
+
 
 db = SQLAlchemy()
 
@@ -9,7 +15,7 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # citizen, rescuer, government
     password_hash = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     is_active = db.Column(db.Boolean, default=True)
     
     # Relationships
@@ -39,8 +45,8 @@ class Report(db.Model):
     severity = db.Column(db.String(20), default='medium')  # low, medium, high, critical
     status = db.Column(db.String(20), default='pending')  # pending, verified, resolved
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # AI-generated fields
     ai_summary = db.Column(db.Text)
@@ -56,7 +62,7 @@ class Alert(db.Model):
     alert_type = db.Column(db.String(50), default='general')  # weather, evacuation, safety, general
     severity = db.Column(db.String(20), default='medium')  # low, medium, high, critical
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     expires_at = db.Column(db.DateTime)
     
     # AI-enhanced fields
@@ -75,8 +81,8 @@ class Mission(db.Model):
     status = db.Column(db.String(20), default='active')  # active, completed, cancelled
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     completed_at = db.Column(db.DateTime)
     
     # AI-generated fields
@@ -94,7 +100,7 @@ class Distribution(db.Model):
     location = db.Column(db.String(200), nullable=False)
     status = db.Column(db.String(20), default='pending')  # pending, distributed, cancelled
     distributed_by = db.Column(db.Integer, db.ForeignKey('user.id'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     distributed_at = db.Column(db.DateTime)
     
     # AI-optimized fields
@@ -113,8 +119,8 @@ class Safehouse(db.Model):
     facilities = db.Column(db.Text)  # JSON string of available facilities
     contact_info = db.Column(db.String(200))
     status = db.Column(db.String(20), default='operational')  # operational, full, closed
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # AI-optimized fields
     ai_occupancy_prediction = db.Column(db.Float)
@@ -130,8 +136,8 @@ class Resource(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     location = db.Column(db.String(200), nullable=False)
     status = db.Column(db.String(20), default='available')  # available, allocated, depleted
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # AI-optimized fields
     ai_demand_prediction = db.Column(db.Float)
@@ -149,7 +155,7 @@ class Team(db.Model):
     team_type = db.Column(db.String(50), nullable=False)  # rescue, medical, logistics, communication
     leader_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     status = db.Column(db.String(20), default='active')  # active, standby, deployed
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     
     # AI-optimized fields
     ai_team_efficiency = db.Column(db.Float)
