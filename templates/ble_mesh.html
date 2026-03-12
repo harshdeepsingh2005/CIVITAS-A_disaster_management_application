@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BLE Mesh Connection - Civitas</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Load main app.js so window.civitasApp (and connectBLE) is available -->
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
     <style>
         .mesh-container {
             max-width: 800px;
